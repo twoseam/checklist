@@ -1549,7 +1549,6 @@
     const list = activeList();
     if (!list) return;
     const todos = list.todos, batches = list.batches;
-    const curBatch = sessionBatches[list.id];
 
     document.getElementById('listTitle').textContent = list.name;
 
@@ -1562,15 +1561,15 @@
     emptyState.style.display = todos.length ? 'none' : 'block';
     taskCount.textContent = todos.length + (todos.length === 1 ? ' task' : ' tasks');
 
-    // History
-    const pastBatches = batches.filter(b => b.id !== curBatch && b.events.length > 0);
+    // History — show every batch with events, including the live session.
+    const historyBatches = batches.filter(b => b.events.length > 0);
     const historySection = document.getElementById('historySection');
     const batchListEl = document.getElementById('batchList');
 
-    historySection.style.display = pastBatches.length ? 'block' : 'none';
+    historySection.style.display = historyBatches.length ? 'block' : 'none';
     batchListEl.innerHTML = '';
 
-    pastBatches.forEach(batch => {
+    historyBatches.forEach(batch => {
       const isOpen = openBatches[batch.id];
       const card = document.createElement('div');
       card.className = 'batch-card';
