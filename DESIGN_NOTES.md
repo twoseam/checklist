@@ -11,7 +11,7 @@ vanilla JS, no build step, no framework, no dependencies.
 - **Live:** https://twoseam.github.io/checklist/
 - **Repo:** https://github.com/twoseam/checklist
 - **Deploy:** push to `main` → GitHub Pages auto-publishes (~1–2 min).
-- **Version:** v1.3.9 in code (in-app changelog: tap the version number).
+- **Version:** v1.3.10 in code (in-app changelog: tap the version number).
 
 ## Files
 
@@ -32,7 +32,9 @@ state = { lists: [ {
 } ] }
 ```
 
-- `action`: `added` | `completed` | `deleted` | `restored`.
+- `action`: only `completed` is logged (since v1.3.10). The `added`/`deleted`/
+  `restored` values still exist in old code paths/CSS but nothing writes them;
+  `loadState` strips any non-`completed` events from existing data.
 - No `completed` array — checking a task removes it and logs a `completed` event.
 - A "session" batch starts on opening a list, ends on leaving it.
 
