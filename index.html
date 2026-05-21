@@ -4,23 +4,24 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Checklist</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23f15826'/%3E%3Cpolyline points='9,16.5 14,21.5 23,10.5' fill='none' stroke='%23ffffff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23F05726'/%3E%3Cpolyline points='9,16.5 14,21.5 23,10.5' fill='none' stroke='%23ffffff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   :root {
-    --bg: #f15826;
+    --bg: #F05726;
+    --on-bg: #fff;
     --surface: #fff;
     --surface-alt: #fdf8f6;
-    --border: #f15826;
-    --border-light: #f1582630;
+    --border: #F05726;
+    --border-light: #F0572630;
     --border-subtle: #f0e8e2;
     --text: #2a2118;
     --text-secondary: #9a8a7a;
     --text-dim: #c8bdb2;
-    --accent: #f15826;
-    --accent-hover: #d94d20;
-    --accent-soft: #fce8e0;
+    --accent: #F05726;
+    --accent-hover: #CC4A20;
+    --accent-soft: #F057261f;
     --pink: #e8a0bf;
     --pink-soft: #f5dce8;
     --green: #4caf68;
@@ -60,7 +61,7 @@
     font-size: 1.8rem;
     font-weight: 700;
     letter-spacing: -0.03em;
-    color: #fff;
+    color: var(--on-bg);
   }
 
   h1.editable { cursor: pointer; }
@@ -68,7 +69,7 @@
 
   .header .count {
     font-size: 0.75rem;
-    color: rgba(255,255,255,0.6);
+    color: color-mix(in srgb, var(--on-bg) 60%, transparent);
     font-variant-numeric: tabular-nums;
     font-weight: 500;
   }
@@ -81,7 +82,7 @@
     background: none;
     border: none;
     cursor: pointer;
-    color: rgba(255,255,255,0.7);
+    color: color-mix(in srgb, var(--on-bg) 70%, transparent);
     font-family: inherit;
     font-size: 0.78rem;
     font-weight: 600;
@@ -90,7 +91,7 @@
     transition: color 0.15s;
   }
 
-  .back-btn:hover { color: #fff; }
+  .back-btn:hover { color: var(--on-bg); }
 
   /* Home: list cards */
   .list-grid {
@@ -174,8 +175,8 @@
   }
 
   .new-list-card {
-    background: rgba(255,255,255,0.12);
-    border: 1.5px dashed rgba(255,255,255,0.45);
+    background: color-mix(in srgb, var(--on-bg) 13%, transparent);
+    border: 1.5px dashed color-mix(in srgb, var(--on-bg) 45%, transparent);
     border-radius: var(--radius);
     aspect-ratio: 1 / 1;
     display: flex;
@@ -183,16 +184,16 @@
     justify-content: center;
     text-align: center;
     cursor: pointer;
-    color: #fff;
+    color: var(--on-bg);
     font-size: 0.82rem;
     font-weight: 600;
     transition: background 0.15s;
   }
 
-  .new-list-card:hover { background: rgba(255,255,255,0.22); }
+  .new-list-card:hover { background: color-mix(in srgb, var(--on-bg) 23%, transparent); }
 
   .home-empty {
-    color: rgba(255,255,255,0.5);
+    color: color-mix(in srgb, var(--on-bg) 50%, transparent);
     font-size: 0.85rem;
     text-align: center;
     padding: 28px 0 8px;
@@ -254,7 +255,7 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: rgba(255,255,255,0.7);
+    color: color-mix(in srgb, var(--on-bg) 70%, transparent);
     margin-bottom: 8px;
   }
 
@@ -378,7 +379,7 @@
 
   /* Empty state */
   .empty-state {
-    color: rgba(255,255,255,0.4);
+    color: color-mix(in srgb, var(--on-bg) 42%, transparent);
     font-size: 0.85rem;
     text-align: center;
     padding: 40px 0;
@@ -396,10 +397,10 @@
     padding: 8px 0;
   }
 
-  .completed-header:hover .section-label { color: #fff; }
+  .completed-header:hover .section-label { color: var(--on-bg); }
 
   .chevron {
-    color: rgba(255,255,255,0.5);
+    color: color-mix(in srgb, var(--on-bg) 50%, transparent);
     font-size: 0.45rem;
     transition: transform 0.2s;
   }
@@ -430,7 +431,7 @@
   .history-section {
     margin-top: 40px;
     padding-top: 24px;
-    border-top: 1px solid rgba(255,255,255,0.15);
+    border-top: 1px solid color-mix(in srgb, var(--on-bg) 18%, transparent);
   }
 
   .history-header {
@@ -443,13 +444,13 @@
   .history-title {
     font-size: 1.1rem;
     font-weight: 700;
-    color: #fff;
+    color: var(--on-bg);
   }
 
   .clear-all-btn {
-    background: rgba(255,255,255,0.15);
+    background: color-mix(in srgb, var(--on-bg) 16%, transparent);
     border: none;
-    color: #fff;
+    color: var(--on-bg);
     font-family: inherit;
     font-size: 0.7rem;
     font-weight: 700;
@@ -461,7 +462,7 @@
     letter-spacing: 0.04em;
   }
 
-  .clear-all-btn:hover { background: rgba(255,255,255,0.25); }
+  .clear-all-btn:hover { background: color-mix(in srgb, var(--on-bg) 28%, transparent); }
 
   .batch-card {
     background: var(--surface);
@@ -616,7 +617,7 @@
     margin-top: 32px;
     font-size: 0.68rem;
     font-weight: 600;
-    color: rgba(255,255,255,0.45);
+    color: color-mix(in srgb, var(--on-bg) 45%, transparent);
     cursor: pointer;
     user-select: none;
     font-variant-numeric: tabular-nums;
@@ -624,7 +625,7 @@
     transition: color 0.15s;
   }
 
-  .version-footer:hover { color: rgba(255,255,255,0.9); }
+  .version-footer:hover { color: color-mix(in srgb, var(--on-bg) 90%, transparent); }
 
   .overlay {
     position: fixed;
@@ -873,20 +874,19 @@
 
 <script>
   const STORAGE_KEY = 'checklist_data';
-  const BRAND = '#f15826';
+  const BRAND = '#F05726';
   const COLORS = [
-    { hex: '#f15826', name: 'Orange' },
-    { hex: '#d6453b', name: 'Red' },
-    { hex: '#e0992e', name: 'Amber' },
-    { hex: '#4caf68', name: 'Green' },
-    { hex: '#2bb3a3', name: 'Teal' },
-    { hex: '#3f7fc4', name: 'Blue' },
-    { hex: '#9b6fc4', name: 'Purple' },
+    { hex: '#F05726', name: 'Orange' },
+    { hex: '#7226F0', name: 'Purple' },
+    { hex: '#26F0C1', name: 'Teal' },
+    { hex: '#F0E726', name: 'Yellow' },
+    { hex: '#9B604C', name: 'Brown' },
   ];
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
     { version: '1.3.0', date: '2026-05-21', changes: [
+      'New 5-color brand palette',
       'Square list cards in a 2-column grid',
       'Drag to reorder list cards',
       'Home backdrop blends every list color',
@@ -1000,14 +1000,27 @@
     return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
   }
 
+  // Perceived lightness — bright colors (yellow, teal) need dark text on them.
+  function isLight(hex) {
+    const h = hex.replace('#', '');
+    const r = parseInt(h.slice(0, 2), 16),
+          g = parseInt(h.slice(2, 4), 16),
+          b = parseInt(h.slice(4, 6), 16);
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6;
+  }
+
   function applyTheme(color) {
     const s = document.documentElement.style;
+    const light = isLight(color);
+    // --bg is the true color; --accent is a version readable on white surfaces.
+    const ink = light ? shade(color, -0.5) : color;
     s.setProperty('--bg', color);
-    s.setProperty('--accent', color);
-    s.setProperty('--accent-hover', shade(color, -0.15));
-    s.setProperty('--accent-soft', color + '1f');
-    s.setProperty('--border', color);
-    s.setProperty('--border-light', color + '30');
+    s.setProperty('--accent', ink);
+    s.setProperty('--accent-hover', shade(ink, -0.15));
+    s.setProperty('--accent-soft', ink + '1f');
+    s.setProperty('--border', ink);
+    s.setProperty('--border-light', ink + '30');
+    s.setProperty('--on-bg', light ? '#2a2118' : '#fff');
   }
 
   // Home backdrop: a gradient blending every list's color.
@@ -1092,7 +1105,10 @@
 
   // --- Home view -----------------------------------------------------------
   function renderHome() {
-    document.documentElement.style.setProperty('--bg', homeGradient());
+    const rootStyle = document.documentElement.style;
+    rootStyle.setProperty('--bg', homeGradient());
+    const first = state.lists[0];
+    rootStyle.setProperty('--on-bg', first && isLight(first.color) ? '#2a2118' : '#fff');
     const grid = document.getElementById('listGrid');
     const count = document.getElementById('listCount');
     count.textContent = state.lists.length + (state.lists.length === 1 ? ' list' : ' lists');
@@ -1212,10 +1228,16 @@
       sw.addEventListener('click', () => {
         pickedColor = c.hex;
         renderColorPicker();
-        document.getElementById('listModalSave').style.background = pickedColor;
+        styleSaveBtn();
       });
       cp.appendChild(sw);
     });
+  }
+
+  function styleSaveBtn() {
+    const b = document.getElementById('listModalSave');
+    b.style.background = pickedColor;
+    b.style.color = isLight(pickedColor) ? '#2a2118' : '#fff';
   }
 
   function openListModal(id) {
@@ -1225,7 +1247,7 @@
     document.getElementById('listNameField').value = list ? list.name : '';
     pickedColor = list ? list.color : COLORS[0].hex;
     renderColorPicker();
-    document.getElementById('listModalSave').style.background = pickedColor;
+    styleSaveBtn();
     document.getElementById('listModalOverlay').classList.add('open');
     setTimeout(() => document.getElementById('listNameField').focus(), 50);
   }
