@@ -249,16 +249,6 @@
 
   .add-btn:hover { background: var(--accent-hover); }
 
-  /* Section labels */
-  .section-label {
-    font-size: 0.68rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: color-mix(in srgb, var(--on-bg) 70%, transparent);
-    margin-bottom: 8px;
-  }
-
   /* Task list */
   .task-list {
     display: flex;
@@ -384,48 +374,6 @@
     text-align: center;
     padding: 40px 0;
   }
-
-  /* Completed section */
-  .completed-section { margin-top: 20px; }
-
-  .completed-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-    user-select: none;
-    padding: 8px 0;
-  }
-
-  .completed-header:hover .section-label { color: var(--on-bg); }
-
-  .chevron {
-    color: color-mix(in srgb, var(--on-bg) 50%, transparent);
-    font-size: 0.45rem;
-    transition: transform 0.2s;
-  }
-
-  .chevron.open { transform: rotate(90deg); }
-
-  .completed-count {
-    font-size: 0.65rem;
-    color: var(--accent);
-    font-weight: 700;
-    background: rgba(255,255,255,0.9);
-    padding: 2px 8px;
-    border-radius: 20px;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .completed-list {
-    overflow: hidden;
-    transition: max-height 0.3s ease;
-    background: var(--surface);
-    border-radius: var(--radius);
-  }
-
-  .completed-list:empty { display: none; }
-  .completed-list.collapsed { max-height: 0 !important; border: none; }
 
   /* History */
   .history-section {
@@ -825,15 +773,6 @@
   <div class="task-list" id="todoList"></div>
   <div class="empty-state" id="emptyState">No tasks yet</div>
 
-  <div class="completed-section" id="completedSection" style="display:none;">
-    <div class="completed-header" onclick="toggleCompleted()">
-      <span class="chevron" id="chevron">▶</span>
-      <span class="section-label" style="margin-bottom:0">Completed</span>
-      <span class="completed-count" id="completedCount">0</span>
-    </div>
-    <div class="completed-list collapsed" id="completedList"></div>
-  </div>
-
   <div class="history-section" id="historySection" style="display:none;">
     <div class="history-header">
       <span class="history-title">History</span>
@@ -891,6 +830,7 @@
       'Square list cards in a 2-column grid',
       'Drag to reorder list cards',
       'History session ends when you leave a list',
+      'Checked tasks go straight to history',
     ]},
     { version: '1.2.0', date: '2026-05-21', changes: [
       'Multiple named lists',
@@ -933,7 +873,6 @@
       name: name,
       color: color,
       todos: (todos || []).map(t => typeof t === 'string' ? { id: uid(), text: t } : t),
-      completed: [],
       batches: [],
     };
   }
@@ -955,11 +894,20 @@
       st = { lists: [ newList('Checklist', BRAND, defaultTodos) ] };
     }
 
-    // Clean up: drop empty history batches left over from past sessions.
+    // Clean up empty batches; fold any old "Completed" list into history.
     st.lists.forEach(l => {
       l.todos = l.todos || [];
-      l.completed = l.completed || [];
       l.batches = (l.batches || []).filter(b => b.events && b.events.length > 0);
+      if (Array.isArray(l.completed) && l.completed.length) {
+        const now = new Date().toISOString();
+        l.batches.push({
+          id: uid(),
+          name: 'Earlier',
+          startedAt: now,
+          events: l.completed.map(t => ({ action: 'completed', text: t.text, at: now })),
+        });
+      }
+      delete l.completed;
     });
     return st;
   }
@@ -969,7 +917,6 @@
   let editingListId = null;       // list being edited in the modal (null = creating)
   let pickedColor = COLORS[0].hex;
   let sessionBatches = {};        // listId -> current batch id (this page session)
-  let completedOpen = false;
   let openBatches = {};
   let dragId = null;
 
@@ -979,6 +926,12 @@
 
   function getList(id) { return state.lists.find(l => l.id === id); }
   function activeList() { return getList(activeListId); }
+
+  // "Done" = completed events still recorded in the list's history.
+  function listDone(list) {
+    return list.batches.reduce((n, b) =>
+      n + b.events.filter(e => e.action === 'completed').length, 0);
+  }
 
   function esc(s) {
     const d = document.createElement('div');
@@ -1092,7 +1045,6 @@
     if (!list) return;
     endSession();
     activeListId = id;
-    completedOpen = false;
     openBatches = {};
     ensureBatch(list);
     applyTheme(list.color);
@@ -1120,7 +1072,7 @@
 
     state.lists.forEach(list => {
       const open = list.todos.length;
-      const done = list.completed.length;
+      const done = listDone(list);
       const total = open + done;
       const pct = total ? Math.round(done / total * 100) : 0;
 
@@ -1306,25 +1258,11 @@
       const idx = list.todos.findIndex(t => t.id === id);
       if (idx > -1) {
         const task = list.todos.splice(idx, 1)[0];
-        list.completed.unshift(task);
         logEvent('completed', task.text);
         saveState();
         render();
       }
     }, 200);
-  }
-
-  function uncompleteTask(id) {
-    const list = activeList();
-    if (!list) return;
-    const idx = list.completed.findIndex(t => t.id === id);
-    if (idx > -1) {
-      const task = list.completed.splice(idx, 1)[0];
-      list.todos.push(task);
-      logEvent('restored', task.text);
-      saveState();
-      render();
-    }
   }
 
   function restoreFromHistory(text, batchId, eventIdx) {
@@ -1335,36 +1273,20 @@
       b.events.splice(eventIdx, 1);
       if (b.events.length === 0) list.batches = list.batches.filter(x => x.id !== batchId);
     }
-    const compIdx = list.completed.findIndex(t => t.text === text);
-    if (compIdx > -1) {
-      list.todos.push(list.completed.splice(compIdx, 1)[0]);
-    } else if (!list.todos.some(t => t.text === text)) {
+    if (!list.todos.some(t => t.text === text)) {
       list.todos.push({ id: uid(), text });
     }
     saveState();
     render();
   }
 
-  function deleteTask(id, fromCompleted) {
+  function deleteTask(id) {
     const list = activeList();
     if (!list) return;
-    let text = '';
-    if (fromCompleted) {
-      const t = list.completed.find(t => t.id === id);
-      if (t) text = t.text;
-      list.completed = list.completed.filter(t => t.id !== id);
-    } else {
-      const t = list.todos.find(t => t.id === id);
-      if (t) text = t.text;
-      list.todos = list.todos.filter(t => t.id !== id);
-    }
-    if (text) logEvent('deleted', text);
+    const t = list.todos.find(t => t.id === id);
+    if (t) logEvent('deleted', t.text);
+    list.todos = list.todos.filter(t => t.id !== id);
     saveState();
-    render();
-  }
-
-  function toggleCompleted() {
-    completedOpen = !completedOpen;
     render();
   }
 
@@ -1462,39 +1384,34 @@
     render();
   }
 
-  function makeItem(task, done) {
+  function makeItem(task) {
     const div = document.createElement('div');
-    div.className = 'task-item' + (done ? ' done' : '');
+    div.className = 'task-item';
     div.setAttribute('data-id', task.id);
-
-    if (!done) {
-      div.draggable = true;
-      div.addEventListener('dragstart', e => onDragStart(e, task.id));
-      div.addEventListener('dragend', onDragEnd);
-      div.addEventListener('dragover', e => onDragOver(e, task.id));
-      div.addEventListener('drop', e => onDrop(e, task.id));
-    }
-
-    const handle = done ? '' : `<div class="drag-handle" title="Drag to reorder">
-      <svg width="7" height="11" viewBox="0 0 7 11" fill="currentColor">
-        <rect x="1" y="0" width="1.5" height="1.5" rx="0.5"/>
-        <rect x="4.5" y="0" width="1.5" height="1.5" rx="0.5"/>
-        <rect x="1" y="4.5" width="1.5" height="1.5" rx="0.5"/>
-        <rect x="4.5" y="4.5" width="1.5" height="1.5" rx="0.5"/>
-        <rect x="1" y="9" width="1.5" height="1.5" rx="0.5"/>
-        <rect x="4.5" y="9" width="1.5" height="1.5" rx="0.5"/>
-      </svg>
-    </div>`;
+    div.draggable = true;
+    div.addEventListener('dragstart', e => onDragStart(e, task.id));
+    div.addEventListener('dragend', onDragEnd);
+    div.addEventListener('dragover', e => onDragOver(e, task.id));
+    div.addEventListener('drop', e => onDrop(e, task.id));
 
     div.innerHTML = `
-      ${handle}
-      <div class="checkbox" onclick="${done ? 'uncompleteTask' : 'completeTask'}(${task.id})">
+      <div class="drag-handle" title="Drag to reorder">
+        <svg width="7" height="11" viewBox="0 0 7 11" fill="currentColor">
+          <rect x="1" y="0" width="1.5" height="1.5" rx="0.5"/>
+          <rect x="4.5" y="0" width="1.5" height="1.5" rx="0.5"/>
+          <rect x="1" y="4.5" width="1.5" height="1.5" rx="0.5"/>
+          <rect x="4.5" y="4.5" width="1.5" height="1.5" rx="0.5"/>
+          <rect x="1" y="9" width="1.5" height="1.5" rx="0.5"/>
+          <rect x="4.5" y="9" width="1.5" height="1.5" rx="0.5"/>
+        </svg>
+      </div>
+      <div class="checkbox" onclick="completeTask(${task.id})">
         <svg viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
           <polyline points="2,6 5,9 10,3"/>
         </svg>
       </div>
-      <span class="task-text" onclick="${done ? 'uncompleteTask' : 'completeTask'}(${task.id})">${esc(task.text)}</span>
-      <button class="delete-btn" onclick="event.stopPropagation();deleteTask(${task.id},${done})" title="Delete">×</button>
+      <span class="task-text" onclick="completeTask(${task.id})">${esc(task.text)}</span>
+      <button class="delete-btn" onclick="event.stopPropagation();deleteTask(${task.id})" title="Delete">×</button>
     `;
     return div;
   }
@@ -1502,31 +1419,19 @@
   function renderList() {
     const list = activeList();
     if (!list) return;
-    const todos = list.todos, completed = list.completed, batches = list.batches;
+    const todos = list.todos, batches = list.batches;
     const curBatch = sessionBatches[list.id];
 
     document.getElementById('listTitle').textContent = list.name;
 
     const todoList = document.getElementById('todoList');
-    const completedList = document.getElementById('completedList');
     const emptyState = document.getElementById('emptyState');
-    const completedSection = document.getElementById('completedSection');
-    const chevron = document.getElementById('chevron');
-    const countBadge = document.getElementById('completedCount');
     const taskCount = document.getElementById('taskCount');
 
     todoList.innerHTML = '';
-    todos.forEach(t => todoList.appendChild(makeItem(t, false)));
+    todos.forEach(t => todoList.appendChild(makeItem(t)));
     emptyState.style.display = todos.length ? 'none' : 'block';
-    taskCount.textContent = todos.length + ' open' + (completed.length ? ' · ' + completed.length + ' done' : '');
-
-    completedSection.style.display = completed.length ? 'block' : 'none';
-    countBadge.textContent = completed.length;
-    chevron.className = 'chevron' + (completedOpen ? ' open' : '');
-    completedList.innerHTML = '';
-    completed.forEach(t => completedList.appendChild(makeItem(t, true)));
-    completedList.className = 'completed-list' + (completedOpen ? '' : ' collapsed');
-    if (completedOpen) completedList.style.maxHeight = completedList.scrollHeight + 'px';
+    taskCount.textContent = todos.length + (todos.length === 1 ? ' task' : ' tasks');
 
     // History
     const pastBatches = batches.filter(b => b.id !== curBatch && b.events.length > 0);
