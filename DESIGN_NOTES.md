@@ -11,19 +11,19 @@ vanilla JS, no build step, no framework, no dependencies.
 - **Live:** https://twoseam.github.io/checklist/
 - **Repo:** https://github.com/twoseam/checklist
 - **Deploy:** push to `main` → GitHub Pages auto-publishes (~1–2 min).
-- **Current version:** v1.3.0 (in-app changelog: click the version number at the
-  bottom of the home screen).
+- **Version:** v1.3.6 in code (in-app changelog: tap the version number).
+  ⚠️ v1.3.5/v1.3.6 may be unpushed/untested — check `git status`.
 
 ## Files
 
 - `index.html` — the entire app.
-- `manifest.json` — PWA manifest (installable web app).
-- `apple-touch-icon.png` (180), `icon-192.png`, `icon-512.png` — home-screen / PWA icons.
+- `manifest.json` — PWA manifest.
+- `apple-touch-icon.png` (180), `icon-192.png`, `icon-512.png` — home-screen icons.
 - `DESIGN_NOTES.md` — this file.
 
 ## Data model
 
-Stored in `localStorage` under key `checklist_data`:
+`localStorage` key `checklist_data`:
 
 ```
 state = { lists: [ {
@@ -33,51 +33,63 @@ state = { lists: [ {
 } ] }
 ```
 
-- `action` is one of: `added` | `completed` | `deleted` | `restored`.
-- There is **no `completed` array** — checking a task removes it from `todos` and
-  logs a `completed` event into the current history batch.
-- A "session" batch starts when you open a list and ends when you leave it.
+- `action`: `added` | `completed` | `deleted` | `restored`.
+- No `completed` array — checking a task removes it and logs a `completed` event.
+- A "session" batch starts on opening a list, ends on leaving it.
 
-## What's built (v1.3.0)
+## What's built
 
-- Multiple named lists; home = square cards in a 2-col grid; drag to reorder cards.
-- Per-list color from a 5-color brand palette; the list view themes to that color.
-- Animated home backdrop: a gradient of every list's color, slowly drifting.
-- Tasks: add, complete (→ history), delete, drag-to-reorder.
-- Per-list session History; shows live; restore any event (Restore button or by
-  clicking the completed item's check icon).
+- Multiple named lists; home = square cards, 2-col grid; drag to reorder cards.
+- 5-color brand palette per list; list view themes to that color.
+- Animated home backdrop: drifting gradient of all list colors.
+- Tasks: add, complete (→history), delete, drag-reorder.
+- Per-list session History; shows live; restore via button or the check icon.
 - Animated "done" badge on a card when its list has 0 open tasks.
-- Branded confirm dialogs (no native browser popups).
-- Sliding view transitions; swipe-right-to-go-back gesture; modals fade/scale in.
+- Branded confirm dialogs (no native popups).
+- Sliding view transitions; swipe-right-to-go-back.
 - Version footer + changelog modal.
-- iOS home-screen icon + installable PWA; mobile pinch-zoom disabled.
-- Contrast handling: light list colors (yellow/teal) auto-switch UI text to dark.
+- iOS home-screen icon + installable PWA; pinch-zoom disabled.
+- Contrast handling: light list colors auto-switch UI text to dark.
 
 ## Brand palette
 
-Orange `#F05726` · Purple `#7226F0` · Teal `#26F0C1` · Yellow `#E5B82B`
-(toned down from the original `#F0E726` for readability) · Brown `#9B604C`.
+Orange `#F05726` · Purple `#7226F0` · Teal `#26F0C1` · Yellow `#E5B82B` · Brown `#9B604C`.
+
+## ⚠️ OPEN BUGS — unresolved at end of session
+
+1. **iOS standalone background gap.** In the installed home-screen webapp, the
+   bottom ~10% of the screen shows the layer *behind* the main background
+   (a strip of the wrong color). Many fix attempts (v1.3.1–v1.3.6) did NOT
+   resolve it. Latest attempt (v1.3.6): the animated gradient was moved onto
+   the `body` element (the orange strip proved `body` reaches the bottom).
+   **UNVERIFIED** — needs testing on a real iPhone.
+   - The background is an ANIMATED gradient (`bgDrift`), not a solid color —
+     any fix must preserve the animation.
+   - DO NOT keep guessing. If v1.3.6 still fails, add a temporary on-screen
+     readout of `window.innerHeight`, `screen.height`, etc. and diagnose with
+     real numbers. This issue cannot be solved blind from screenshots.
+
+2. **Pull-to-refresh doesn't work.** Native pull-to-refresh can't work with the
+   fixed-position view layout. Needs a custom gesture build. `overscroll-behavior`
+   was removed but that did not enable it.
 
 ## Caveats / accepted tradeoffs
 
-- **No sync.** `localStorage` only — every browser/device is independent, no
-  accounts, no cross-device sync. (Considered Supabase accounts or a shared
-  sync-code; user chose to skip for now — see Roadmap.)
-- Swipe-back gesture is **touch-only** — not testable with a desktop mouse.
-- The app is JS-rendered, so markdown/fetch tools can't verify it — test in a
-  real browser.
-- iOS status bar style is `default` (light bar, dark text) on purpose;
-  `black-translucent` would put white status text over light list colors.
-- App always opens to the home view on load (doesn't restore the last open list).
+- **No sync.** `localStorage` only — every browser/device is independent.
+- Swipe-back gesture is touch-only.
+- The app is JS-rendered — markdown/fetch tools can't verify it; test in a browser.
+- iOS standalone caches hard — to see a new version you must delete the
+  home-screen icon and re-add it.
+- App always opens to the home view on load.
 
 ## Workflow notes
 
-- Owner pushes via **GitHub Desktop**. (One earlier push failed due to a diverged
-  branch — resolved with a rebase.)
-- The repo file is lowercase `index.html` (was once `Index.html`).
+- Owner (Michael) pushes via GitHub Desktop. He is a filmmaker, not a developer.
+- Communication preferences are mandatory — see `../../00-Communication.md`
+  (auto-loaded). Very short, bullet lists, one task-step at a time, no jargon.
 
-## Roadmap / ideas (not committed)
+## Roadmap
 
-- Cross-device persistence — Supabase accounts (passwordless) or a shared
-  sync-code. Bigger change; needs a backend service. Deferred.
-- Optional: auto-expand the current session in History.
+- ← NEXT: verify/finish the iOS background fix (open bug #1).
+- Then: custom pull-to-refresh (open bug #2).
+- Later (deferred): cross-device sync (Supabase accounts or shared sync-code).

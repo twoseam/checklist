@@ -366,6 +366,10 @@
     transform: translateX(14px);
   }
 
+  /* Swipe-left to complete */
+  .task-item.swiping { transition: none; background: var(--surface-alt); }
+  .task-item.will-complete { background: var(--green-soft); }
+
   .task-item.adding {
     animation: fadeUp 0.2s ease-out;
   }
@@ -852,6 +856,26 @@
     line-height: 1.5;
     margin-bottom: 20px;
   }
+
+  /* TEMP: background-gap diagnostics */
+  #diag {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 9999;
+    background: #ff2db5;
+    color: #fff;
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 10px;
+    line-height: 1.45;
+    padding: 6px 10px;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+  }
+  #sap {
+    position: fixed; bottom: 0; left: 0;
+    width: 0; height: 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
 </style>
 </head>
 <body>
@@ -920,6 +944,10 @@
   </div>
 </div>
 
+<!-- TEMP: background-gap diagnostics -->
+<div id="diag"></div>
+<div id="sap"></div>
+
 <!-- CONFIRM DIALOG -->
 <div class="overlay" id="confirmOverlay">
   <div class="modal">
@@ -948,6 +976,11 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.3.7', date: '2026-05-21', changes: [
+      'Swipe a task left to tick it off',
+      'New lists now start empty',
+      'Temporary pink strip at the bottom — diagnoses the background gap',
+    ]},
     { version: '1.3.6', date: '2026-05-21', changes: [
       'Background fills the entire screen',
       'Bigger edit/delete buttons on cards',
@@ -989,16 +1022,6 @@
   ];
   const APP_VERSION = CHANGELOG[0].version;
 
-  const defaultTodos = [
-    'Search Bars for both',
-    'Spacing after title',
-    'What is the little pop up',
-    'Moble popup for papercuts',
-    'Persistent password for editing videos',
-    'Tutorial popups for first timers',
-    'MOve buttons above videos',
-  ];
-
   // --- ID helper -----------------------------------------------------------
   let idSeq = 0;
   function uid() { return Date.now() * 1000 + (idSeq++ % 1000); }
@@ -1028,7 +1051,7 @@
         todos: raw.todos || [], completed: raw.completed || [], batches: raw.batches || [],
       }] };
     } else {
-      st = { lists: [ newList('Checklist', BRAND, defaultTodos) ] };
+      st = { lists: [ newList('Checklist', BRAND, []) ] };
     }
 
     // Clean up empty batches; fold any old "Completed" list into history.
@@ -1571,6 +1594,49 @@
       <span class="task-text" onclick="completeTask(${task.id})">${esc(task.text)}</span>
       <button class="delete-btn" onclick="event.stopPropagation();deleteTask(${task.id})" title="Delete">×</button>
     `;
+
+    // Swipe the row to the left to tick it off.
+    (function () {
+      let x0 = 0, y0 = 0, d = 0, decided = false, horiz = false, track = false;
+      div.addEventListener('touchstart', e => {
+        if (e.touches.length !== 1) { track = false; return; }
+        x0 = e.touches[0].clientX;
+        y0 = e.touches[0].clientY;
+        d = 0; decided = false; horiz = false; track = true;
+      }, { passive: true });
+      div.addEventListener('touchmove', e => {
+        if (!track) return;
+        const mx = e.touches[0].clientX - x0;
+        const my = e.touches[0].clientY - y0;
+        if (!decided) {
+          if (Math.abs(mx) < 10 && Math.abs(my) < 10) return;
+          decided = true;
+          horiz = mx < 0 && Math.abs(mx) > Math.abs(my);
+          if (horiz) div.classList.add('swiping');
+        }
+        if (!horiz) return;
+        e.preventDefault();
+        d = Math.min(0, mx);
+        div.style.transform = 'translateX(' + d + 'px)';
+        div.classList.toggle('will-complete', -d > div.offsetWidth * 0.3);
+      }, { passive: false });
+      function endTaskSwipe() {
+        if (!track) return;
+        track = false;
+        if (!horiz) return;
+        div.classList.remove('swiping', 'will-complete');
+        if (-d > div.offsetWidth * 0.3) {
+          div.style.transform = 'translateX(-100%)';
+          completeTask(task.id);
+        } else {
+          div.style.transform = '';
+        }
+        d = 0;
+      }
+      div.addEventListener('touchend', endTaskSwipe);
+      div.addEventListener('touchcancel', endTaskSwipe);
+    })();
+
     return div;
   }
 
@@ -1780,10 +1846,32 @@
   function setAppHeight() {
     const h = Math.max(window.innerHeight, window.screen.height || 0);
     document.documentElement.style.setProperty('--app-h', h + 'px');
+    updateDiag();
   }
+
+  // TEMP: on-screen readout for diagnosing the iOS standalone background gap.
+  function updateDiag() {
+    const d = document.getElementById('diag');
+    if (!d) return;
+    const de = document.documentElement;
+    const vv = window.visualViewport;
+    const sab = getComputedStyle(document.getElementById('sap')).paddingBottom;
+    const appH = getComputedStyle(de).getPropertyValue('--app-h').trim();
+    d.innerHTML =
+      'win ' + window.innerWidth + '×' + window.innerHeight +
+      '  ·  screen ' + screen.width + '×' + screen.height +
+      '  ·  PWA ' + (window.navigator.standalone === true) +
+      '<br>clientH ' + de.clientHeight +
+      '  ·  visualVP ' + (vv ? Math.round(vv.height) : '?') +
+      '  ·  bodyH ' + document.body.offsetHeight +
+      '<br>--app-h ' + appH +
+      '  ·  safe-bottom ' + sab;
+  }
+
   setAppHeight();
   window.addEventListener('resize', setAppHeight);
   window.addEventListener('orientationchange', setAppHeight);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', updateDiag);
 
   renderVersion();
   goHome();
