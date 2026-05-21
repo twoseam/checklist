@@ -11,8 +11,7 @@ vanilla JS, no build step, no framework, no dependencies.
 - **Live:** https://twoseam.github.io/checklist/
 - **Repo:** https://github.com/twoseam/checklist
 - **Deploy:** push to `main` → GitHub Pages auto-publishes (~1–2 min).
-- **Version:** v1.3.6 in code (in-app changelog: tap the version number).
-  ⚠️ v1.3.5/v1.3.6 may be unpushed/untested — check `git status`.
+- **Version:** v1.3.8 in code (in-app changelog: tap the version number).
 
 ## Files
 
@@ -43,6 +42,8 @@ state = { lists: [ {
 - 5-color brand palette per list; list view themes to that color.
 - Animated home backdrop: drifting gradient of all list colors.
 - Tasks: add, complete (→history), delete, drag-reorder.
+- Swipe a task left to complete it (turns green past ~30% of row width).
+- New lists (and fresh installs) start with no tasks.
 - Per-list session History; shows live; restore via button or the check icon.
 - Animated "done" badge on a card when its list has 0 open tasks.
 - Branded confirm dialogs (no native popups).
@@ -55,23 +56,23 @@ state = { lists: [ {
 
 Orange `#F05726` · Purple `#7226F0` · Teal `#26F0C1` · Yellow `#E5B82B` · Brown `#9B604C`.
 
-## ⚠️ OPEN BUGS — unresolved at end of session
+## ⚠️ OPEN BUGS
 
-1. **iOS standalone background gap.** In the installed home-screen webapp, the
-   bottom ~10% of the screen shows the layer *behind* the main background
-   (a strip of the wrong color). Many fix attempts (v1.3.1–v1.3.6) did NOT
-   resolve it. Latest attempt (v1.3.6): the animated gradient was moved onto
-   the `body` element (the orange strip proved `body` reaches the bottom).
-   **UNVERIFIED** — needs testing on a real iPhone.
-   - The background is an ANIMATED gradient (`bgDrift`), not a solid color —
-     any fix must preserve the animation.
-   - DO NOT keep guessing. If v1.3.6 still fails, add a temporary on-screen
-     readout of `window.innerHeight`, `screen.height`, etc. and diagnose with
-     real numbers. This issue cannot be solved blind from screenshots.
-
-2. **Pull-to-refresh doesn't work.** Native pull-to-refresh can't work with the
+1. **Pull-to-refresh doesn't work.** Native pull-to-refresh can't work with the
    fixed-position view layout. Needs a custom gesture build. `overscroll-behavior`
    was removed but that did not enable it.
+
+## Resolved
+
+- **iOS standalone background gap (FIXED v1.3.8).** In the installed app the
+  bottom ~62px showed white. Diagnosed with an on-screen readout: in standalone
+  PWA, `innerHeight`/`body` height = 894px but `screen.height` = 956px, so the
+  `body`-painted gradient stopped 62px short. Fix: the animated gradient moved
+  off `body` onto a dedicated `#bgLayer` — `position: fixed`, `height:
+  calc(var(--app-h) + 120px)` — which overshoots the screen edge. `--app-h` is
+  `max(innerHeight, screen.height)`. `body` keeps a solid-color fallback only.
+  ⚠️ Diagnosis is conclusive (real numbers), but the v1.3.8 fix itself is not
+  yet confirmed on-device — needs one screenshot of the installed app.
 
 ## Caveats / accepted tradeoffs
 
@@ -90,6 +91,6 @@ Orange `#F05726` · Purple `#7226F0` · Teal `#26F0C1` · Yellow `#E5B82B` · Br
 
 ## Roadmap
 
-- ← NEXT: verify/finish the iOS background fix (open bug #1).
-- Then: custom pull-to-refresh (open bug #2).
+- ← NEXT: confirm the v1.3.8 background fix on a real iPhone.
+- Then: custom pull-to-refresh (open bug #1).
 - Later (deferred): cross-device sync (Supabase accounts or shared sync-code).

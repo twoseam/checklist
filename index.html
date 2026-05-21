@@ -47,12 +47,22 @@
 
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
-    background: var(--app-bg, #F05726);
-    background-size: 300vw 300vh;
-    animation: bgDrift 22s ease-in-out infinite;
+    background: #F05726;
     color: var(--text);
     -webkit-font-smoothing: antialiased;
     overflow: hidden;
+  }
+
+  /* Full-screen animated backdrop. Sized past the viewport so it covers the
+     home-indicator strip iOS leaves uncovered in the installed app. */
+  #bgLayer {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: calc(var(--app-h, 100%) + 120px);
+    background: var(--app-bg, #F05726);
+    background-size: 300vw 300vh;
+    animation: bgDrift 22s ease-in-out infinite;
+    z-index: 0;
   }
 
   @keyframes bgDrift {
@@ -61,7 +71,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    body, .list-card-badge { animation: none; }
+    #bgLayer, .list-card-badge { animation: none; }
     #listView { transition: none; }
   }
 
@@ -856,29 +866,11 @@
     line-height: 1.5;
     margin-bottom: 20px;
   }
-
-  /* TEMP: background-gap diagnostics */
-  #diag {
-    position: fixed;
-    left: 0; right: 0; bottom: 0;
-    z-index: 9999;
-    background: #ff2db5;
-    color: #fff;
-    font-family: ui-monospace, Menlo, monospace;
-    font-size: 10px;
-    line-height: 1.45;
-    padding: 6px 10px;
-    font-variant-numeric: tabular-nums;
-    pointer-events: none;
-  }
-  #sap {
-    position: fixed; bottom: 0; left: 0;
-    width: 0; height: 0;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
 </style>
 </head>
 <body>
+
+<div id="bgLayer"></div>
 
 <!-- HOME VIEW -->
 <div class="view" id="homeView"><div class="view-inner">
@@ -944,10 +936,6 @@
   </div>
 </div>
 
-<!-- TEMP: background-gap diagnostics -->
-<div id="diag"></div>
-<div id="sap"></div>
-
 <!-- CONFIRM DIALOG -->
 <div class="overlay" id="confirmOverlay">
   <div class="modal">
@@ -976,10 +964,10 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
-    { version: '1.3.7', date: '2026-05-21', changes: [
+    { version: '1.3.8', date: '2026-05-21', changes: [
+      'Fixed the white strip at the bottom of the installed app',
       'Swipe a task left to tick it off',
       'New lists now start empty',
-      'Temporary pink strip at the bottom — diagnoses the background gap',
     ]},
     { version: '1.3.6', date: '2026-05-21', changes: [
       'Background fills the entire screen',
@@ -1846,32 +1834,10 @@
   function setAppHeight() {
     const h = Math.max(window.innerHeight, window.screen.height || 0);
     document.documentElement.style.setProperty('--app-h', h + 'px');
-    updateDiag();
   }
-
-  // TEMP: on-screen readout for diagnosing the iOS standalone background gap.
-  function updateDiag() {
-    const d = document.getElementById('diag');
-    if (!d) return;
-    const de = document.documentElement;
-    const vv = window.visualViewport;
-    const sab = getComputedStyle(document.getElementById('sap')).paddingBottom;
-    const appH = getComputedStyle(de).getPropertyValue('--app-h').trim();
-    d.innerHTML =
-      'win ' + window.innerWidth + '×' + window.innerHeight +
-      '  ·  screen ' + screen.width + '×' + screen.height +
-      '  ·  PWA ' + (window.navigator.standalone === true) +
-      '<br>clientH ' + de.clientHeight +
-      '  ·  visualVP ' + (vv ? Math.round(vv.height) : '?') +
-      '  ·  bodyH ' + document.body.offsetHeight +
-      '<br>--app-h ' + appH +
-      '  ·  safe-bottom ' + sab;
-  }
-
   setAppHeight();
   window.addEventListener('resize', setAppHeight);
   window.addEventListener('orientationchange', setAppHeight);
-  if (window.visualViewport) window.visualViewport.addEventListener('resize', updateDiag);
 
   renderVersion();
   goHome();
