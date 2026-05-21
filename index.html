@@ -42,12 +42,17 @@
   }
 
   html, body {
+    height: 100%;
+  }
+
+  body {
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
-    background: #F05726;
+    background: var(--app-bg, #F05726);
+    background-size: 300vw 300vh;
+    animation: bgDrift 22s ease-in-out infinite;
     color: var(--text);
     -webkit-font-smoothing: antialiased;
     overflow: hidden;
-    height: 100%;
   }
 
   @keyframes bgDrift {
@@ -56,7 +61,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    #appBg, .list-card-badge { animation: none; }
+    body, .list-card-badge { animation: none; }
     #listView { transition: none; }
   }
 
@@ -68,20 +73,6 @@
     height: var(--app-h, 100%);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-  }
-
-  /* Oversized background layer — physically cannot leave a gap. */
-  #appBg {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: calc(var(--app-h, 100vh) + 220px);
-    z-index: 0;
-    background: var(--app-bg, #F05726);
-    background-size: 300% 300%;
-    animation: bgDrift 22s ease-in-out infinite;
-    pointer-events: none;
   }
 
   #homeView {
@@ -864,7 +855,6 @@
 </style>
 </head>
 <body>
-<div id="appBg"></div>
 
 <!-- HOME VIEW -->
 <div class="view" id="homeView"><div class="view-inner">
@@ -958,10 +948,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
-    { version: '1.3.4', date: '2026-05-21', changes: [
-      'Background truly fills the entire screen',
+    { version: '1.3.6', date: '2026-05-21', changes: [
+      'Background fills the entire screen',
       'Bigger edit/delete buttons on cards',
-      'Pull-to-refresh re-enabled',
     ]},
     { version: '1.3.1', date: '2026-05-21', changes: [
       'Color now fills behind the iOS status bar',
