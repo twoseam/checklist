@@ -41,12 +41,13 @@
     --radius-xs: 3px;
   }
 
-  body {
+  html, body {
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
-    background: #2a2118;
+    background: #F05726;
     color: var(--text);
     -webkit-font-smoothing: antialiased;
     overflow: hidden;
+    height: 100%;
   }
 
   @keyframes bgDrift {
@@ -65,18 +66,6 @@
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
-  }
-
-  /* Subtle scrim behind the iOS status bar so its text stays legible. */
-  .view::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: env(safe-area-inset-top, 0px);
-    background: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0));
-    pointer-events: none;
   }
 
   #homeView {
