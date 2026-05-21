@@ -889,6 +889,8 @@
     { version: '1.3.0', date: '2026-05-21', changes: [
       'Square list cards in a 2-column grid',
       'Drag to reorder list cards',
+      'Home backdrop blends every list color',
+      'History session ends when you leave a list',
     ]},
     { version: '1.2.0', date: '2026-05-21', changes: [
       'Multiple named lists',
@@ -1008,6 +1010,14 @@
     s.setProperty('--border-light', color + '30');
   }
 
+  // Home backdrop: a gradient blending every list's color.
+  function homeGradient() {
+    const colors = state.lists.map(l => l.color);
+    if (colors.length === 0) return BRAND;
+    if (colors.length === 1) return colors[0];
+    return 'linear-gradient(160deg, ' + colors.join(', ') + ')';
+  }
+
   // --- History batches -----------------------------------------------------
   function ensureBatch(list) {
     if (sessionBatches[list.id]) return sessionBatches[list.id];
@@ -1034,8 +1044,25 @@
     }
   }
 
+  // Close the active list's history session. Called whenever we leave a list.
+  // An empty session (visited, but nothing changed) is discarded entirely.
+  function endSession() {
+    if (!activeListId) return;
+    const list = getList(activeListId);
+    const bId = sessionBatches[activeListId];
+    if (list && bId) {
+      const b = list.batches.find(x => x.id === bId);
+      if (b && b.events.length === 0) {
+        list.batches = list.batches.filter(x => x.id !== bId);
+      }
+    }
+    delete sessionBatches[activeListId];
+    saveState();
+  }
+
   // --- Navigation ----------------------------------------------------------
   function goHome() {
+    endSession();
     activeListId = null;
     applyTheme(BRAND);
     document.getElementById('listView').style.display = 'none';
@@ -1046,6 +1073,7 @@
   function openList(id) {
     const list = getList(id);
     if (!list) return;
+    endSession();
     activeListId = id;
     completedOpen = false;
     openBatches = {};
@@ -1064,6 +1092,7 @@
 
   // --- Home view -----------------------------------------------------------
   function renderHome() {
+    document.documentElement.style.setProperty('--bg', homeGradient());
     const grid = document.getElementById('listGrid');
     const count = document.getElementById('listCount');
     count.textContent = state.lists.length + (state.lists.length === 1 ? ' list' : ' lists');
