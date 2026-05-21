@@ -40,6 +40,7 @@
     min-height: 100vh;
     padding: 48px 20px 80px;
     -webkit-font-smoothing: antialiased;
+    transition: background 0.25s ease;
   }
 
   .container {
@@ -62,11 +63,124 @@
     color: #fff;
   }
 
+  h1.editable { cursor: pointer; }
+  h1.editable:hover { opacity: 0.85; }
+
   .header .count {
     font-size: 0.75rem;
     color: rgba(255,255,255,0.6);
     font-variant-numeric: tabular-nums;
     font-weight: 500;
+  }
+
+  /* Back button */
+  .back-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: rgba(255,255,255,0.7);
+    font-family: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 4px 0;
+    margin-bottom: 10px;
+    transition: color 0.15s;
+  }
+
+  .back-btn:hover { color: #fff; }
+
+  /* Home: list cards */
+  .list-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .list-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    overflow: hidden;
+    cursor: pointer;
+    position: relative;
+    transition: transform 0.12s, box-shadow 0.12s;
+  }
+
+  .list-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.14);
+  }
+
+  .list-card-stripe { height: 6px; width: 100%; }
+
+  .list-card-body { padding: 13px 16px 15px; }
+
+  .list-card-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .list-card-name {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .list-card-actions {
+    display: flex;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 0.12s;
+    flex-shrink: 0;
+  }
+
+  .list-card:hover .list-card-actions { opacity: 1; }
+
+  .list-card-counts {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    margin-top: 3px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .list-card-progress {
+    margin-top: 10px;
+    height: 5px;
+    background: var(--border-subtle);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .list-card-progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+  }
+
+  .new-list-card {
+    background: rgba(255,255,255,0.12);
+    border: 1.5px dashed rgba(255,255,255,0.45);
+    border-radius: var(--radius);
+    padding: 16px;
+    text-align: center;
+    cursor: pointer;
+    color: #fff;
+    font-size: 0.82rem;
+    font-weight: 600;
+    transition: background 0.15s;
+  }
+
+  .new-list-card:hover { background: rgba(255,255,255,0.22); }
+
+  .home-empty {
+    color: rgba(255,255,255,0.5);
+    font-size: 0.85rem;
+    text-align: center;
+    padding: 28px 0 8px;
   }
 
   /* Input */
@@ -497,7 +611,7 @@
 
   .version-footer:hover { color: rgba(255,255,255,0.9); }
 
-  .changelog-overlay {
+  .overlay {
     position: fixed;
     inset: 0;
     background: rgba(42,33,24,0.55);
@@ -508,9 +622,9 @@
     z-index: 100;
   }
 
-  .changelog-overlay.open { display: flex; }
+  .overlay.open { display: flex; }
 
-  .changelog-modal {
+  .modal {
     background: var(--surface);
     border-radius: var(--radius);
     width: 100%;
@@ -520,20 +634,20 @@
     padding: 20px 22px 24px;
   }
 
-  .changelog-modal-header {
+  .modal-header {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     margin-bottom: 16px;
   }
 
-  .changelog-modal-title {
+  .modal-title {
     font-size: 1.05rem;
     font-weight: 700;
     color: var(--text);
   }
 
-  .changelog-close {
+  .modal-close {
     background: none;
     border: none;
     color: var(--text-dim);
@@ -544,8 +658,9 @@
     transition: color 0.12s;
   }
 
-  .changelog-close:hover { color: var(--red); }
+  .modal-close:hover { color: var(--red); }
 
+  /* Changelog */
   .changelog-entry { margin-bottom: 16px; }
   .changelog-entry:last-child { margin-bottom: 0; }
 
@@ -594,17 +709,100 @@
     border-radius: 50%;
     background: var(--accent);
   }
+
+  /* List create/edit modal */
+  .field-label {
+    display: block;
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-secondary);
+    margin-bottom: 7px;
+  }
+
+  .list-name-field {
+    width: 100%;
+    font-family: inherit;
+    font-size: 0.88rem;
+    color: var(--text);
+    padding: 10px 12px;
+    border: 1.5px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    outline: none;
+    margin-bottom: 18px;
+    transition: border-color 0.15s;
+  }
+
+  .list-name-field:focus { border-color: var(--accent); }
+
+  .color-picker {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 22px;
+  }
+
+  .color-swatch {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.12s;
+  }
+
+  .color-swatch:hover { transform: scale(1.12); }
+
+  .color-swatch.selected {
+    transform: scale(1.12);
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--text-dim);
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .modal-btn-primary, .modal-btn-secondary {
+    font-family: inherit;
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 9px 18px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    border: none;
+    transition: filter 0.15s, background 0.15s;
+  }
+
+  .modal-btn-primary { background: var(--accent); color: #fff; }
+  .modal-btn-primary:hover { filter: brightness(0.92); }
+
+  .modal-btn-secondary { background: var(--border-subtle); color: var(--text-secondary); }
+  .modal-btn-secondary:hover { background: #e8ddd3; }
 </style>
 </head>
 <body>
-<div class="container">
+
+<!-- HOME VIEW -->
+<div class="container" id="homeView">
   <div class="header">
-    <h1>Checklist</h1>
+    <h1>Lists</h1>
+    <div class="count" id="listCount"></div>
+  </div>
+  <div class="list-grid" id="listGrid"></div>
+  <div class="version-footer" id="versionFooter" onclick="openChangelog()" title="View changelog"></div>
+</div>
+
+<!-- LIST VIEW -->
+<div class="container" id="listView" style="display:none;">
+  <button class="back-btn" onclick="goHome()">← All lists</button>
+  <div class="header">
+    <h1 id="listTitle" class="editable" onclick="openListModal(activeListId)" title="Edit list"></h1>
     <div class="count" id="taskCount"></div>
   </div>
 
   <div class="input-row">
-    <input type="text" id="newTask" placeholder="Add a task..." autofocus>
+    <input type="text" id="newTask" placeholder="Add a task...">
     <button class="add-btn" onclick="addTask()">Add</button>
   </div>
 
@@ -627,25 +825,58 @@
     </div>
     <div id="batchList"></div>
   </div>
-
-  <div class="version-footer" id="versionFooter" onclick="openChangelog()" title="View changelog"></div>
 </div>
 
-<div class="changelog-overlay" id="changelogOverlay">
-  <div class="changelog-modal">
-    <div class="changelog-modal-header">
-      <span class="changelog-modal-title">Changelog</span>
-      <button class="changelog-close" onclick="closeChangelog()" title="Close">×</button>
+<!-- CHANGELOG MODAL -->
+<div class="overlay" id="changelogOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Changelog</span>
+      <button class="modal-close" onclick="closeChangelog()" title="Close">×</button>
     </div>
     <div id="changelogBody"></div>
   </div>
 </div>
 
+<!-- LIST CREATE/EDIT MODAL -->
+<div class="overlay" id="listModalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="listModalTitle">New list</span>
+      <button class="modal-close" onclick="closeListModal()" title="Close">×</button>
+    </div>
+    <label class="field-label">Name</label>
+    <input type="text" class="list-name-field" id="listNameField" placeholder="e.g. Website Redesign">
+    <label class="field-label">Color</label>
+    <div class="color-picker" id="colorPicker"></div>
+    <div class="modal-actions">
+      <button class="modal-btn-secondary" onclick="closeListModal()">Cancel</button>
+      <button class="modal-btn-primary" id="listModalSave" onclick="saveListModal()">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
   const STORAGE_KEY = 'checklist_data';
+  const BRAND = '#f15826';
+  const COLORS = [
+    { hex: '#f15826', name: 'Orange' },
+    { hex: '#d6453b', name: 'Red' },
+    { hex: '#e0992e', name: 'Amber' },
+    { hex: '#4caf68', name: 'Green' },
+    { hex: '#2bb3a3', name: 'Teal' },
+    { hex: '#3f7fc4', name: 'Blue' },
+    { hex: '#9b6fc4', name: 'Purple' },
+  ];
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.2.0', date: '2026-05-21', changes: [
+      'Multiple named lists',
+      'Home page with list cards',
+      '7-color picker per list',
+      'Progress bar on each card',
+    ]},
     { version: '1.1.0', date: '2026-05-21', changes: [
       'Added version number',
       'Added changelog (click the version)',
@@ -660,68 +891,283 @@
   ];
   const APP_VERSION = CHANGELOG[0].version;
 
-  function loadState() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return JSON.parse(raw);
-    } catch(e) {}
-    return null;
-  }
-
-  function saveState() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ todos, completed, batches, currentBatchId }));
-  }
-
   const defaultTodos = [
-    { id: 1, text: 'Search Bars for both' },
-    { id: 2, text: 'Spacing after title' },
-    { id: 3, text: 'What is the little pop up' },
-    { id: 4, text: 'Moble popup for papercuts' },
-    { id: 5, text: 'Persistent password for editing videos' },
-    { id: 6, text: 'Tutorial popups for first timers' },
-    { id: 7, text: 'MOve buttons above videos' },
+    'Search Bars for both',
+    'Spacing after title',
+    'What is the little pop up',
+    'Moble popup for papercuts',
+    'Persistent password for editing videos',
+    'Tutorial popups for first timers',
+    'MOve buttons above videos',
   ];
 
-  const saved = loadState();
-  let todos = saved ? saved.todos : [...defaultTodos];
-  let completed = saved ? saved.completed : [];
-  let batches = saved ? saved.batches : [];
-  let currentBatchId = null;
+  // --- ID helper -----------------------------------------------------------
+  let idSeq = 0;
+  function uid() { return Date.now() * 1000 + (idSeq++ % 1000); }
 
-  function startBatch() {
+  // --- State + persistence -------------------------------------------------
+  function newList(name, color, todos) {
+    return {
+      id: uid(),
+      name: name,
+      color: color,
+      todos: (todos || []).map(t => typeof t === 'string' ? { id: uid(), text: t } : t),
+      completed: [],
+      batches: [],
+    };
+  }
+
+  function loadState() {
+    let raw = null;
+    try { raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch (e) {}
+
+    let st;
+    if (raw && Array.isArray(raw.lists)) {
+      st = raw;
+    } else if (raw && Array.isArray(raw.todos)) {
+      // Migrate the old single-list format into the first list.
+      st = { lists: [{
+        id: uid(), name: 'Checklist', color: BRAND,
+        todos: raw.todos || [], completed: raw.completed || [], batches: raw.batches || [],
+      }] };
+    } else {
+      st = { lists: [ newList('Checklist', BRAND, defaultTodos) ] };
+    }
+
+    // Clean up: drop empty history batches left over from past sessions.
+    st.lists.forEach(l => {
+      l.todos = l.todos || [];
+      l.completed = l.completed || [];
+      l.batches = (l.batches || []).filter(b => b.events && b.events.length > 0);
+    });
+    return st;
+  }
+
+  let state = loadState();
+  let activeListId = null;        // null = home view
+  let editingListId = null;       // list being edited in the modal (null = creating)
+  let pickedColor = COLORS[0].hex;
+  let sessionBatches = {};        // listId -> current batch id (this page session)
+  let completedOpen = false;
+  let openBatches = {};
+  let dragId = null;
+
+  function saveState() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+
+  function getList(id) { return state.lists.find(l => l.id === id); }
+  function activeList() { return getList(activeListId); }
+
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  // --- Theming -------------------------------------------------------------
+  function shade(hex, amt) {
+    // amt < 0 darkens toward black, amt > 0 lightens toward white
+    const h = hex.replace('#', '');
+    let r = parseInt(h.slice(0, 2), 16),
+        g = parseInt(h.slice(2, 4), 16),
+        b = parseInt(h.slice(4, 6), 16);
+    const target = amt < 0 ? 0 : 255, p = Math.abs(amt);
+    r = Math.round((target - r) * p) + r;
+    g = Math.round((target - g) * p) + g;
+    b = Math.round((target - b) * p) + b;
+    return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+  }
+
+  function applyTheme(color) {
+    const s = document.documentElement.style;
+    s.setProperty('--bg', color);
+    s.setProperty('--accent', color);
+    s.setProperty('--accent-hover', shade(color, -0.15));
+    s.setProperty('--accent-soft', color + '1f');
+    s.setProperty('--border', color);
+    s.setProperty('--border-light', color + '30');
+  }
+
+  // --- History batches -----------------------------------------------------
+  function ensureBatch(list) {
+    if (sessionBatches[list.id]) return sessionBatches[list.id];
     const now = new Date();
     const batch = {
-      id: Date.now(),
+      id: uid(),
       name: now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }),
       startedAt: now.toISOString(),
-      events: []
+      events: [],
     };
-    batches.unshift(batch);
-    currentBatchId = batch.id;
-    saveState();
+    list.batches.unshift(batch);
+    sessionBatches[list.id] = batch.id;
+    return batch.id;
   }
 
   function logEvent(action, text) {
-    if (!currentBatchId) return;
-    const batch = batches.find(b => b.id === currentBatchId);
+    const list = activeList();
+    if (!list) return;
+    const bId = ensureBatch(list);
+    const batch = list.batches.find(b => b.id === bId);
     if (batch) {
       batch.events.push({ action, text, at: new Date().toISOString() });
       saveState();
     }
   }
 
-  startBatch();
+  // --- Navigation ----------------------------------------------------------
+  function goHome() {
+    activeListId = null;
+    applyTheme(BRAND);
+    document.getElementById('listView').style.display = 'none';
+    document.getElementById('homeView').style.display = 'block';
+    renderHome();
+  }
 
-  let completedOpen = false;
-  let openBatches = {};
+  function openList(id) {
+    const list = getList(id);
+    if (!list) return;
+    activeListId = id;
+    completedOpen = false;
+    openBatches = {};
+    ensureBatch(list);
+    applyTheme(list.color);
+    document.getElementById('homeView').style.display = 'none';
+    document.getElementById('listView').style.display = 'block';
+    renderList();
+    document.getElementById('newTask').focus();
+  }
 
+  function render() {
+    if (activeListId) renderList();
+    else renderHome();
+  }
+
+  // --- Home view -----------------------------------------------------------
+  function renderHome() {
+    const grid = document.getElementById('listGrid');
+    const count = document.getElementById('listCount');
+    count.textContent = state.lists.length + (state.lists.length === 1 ? ' list' : ' lists');
+    grid.innerHTML = '';
+
+    state.lists.forEach(list => {
+      const open = list.todos.length;
+      const done = list.completed.length;
+      const total = open + done;
+      const pct = total ? Math.round(done / total * 100) : 0;
+
+      const card = document.createElement('div');
+      card.className = 'list-card';
+      card.addEventListener('click', () => openList(list.id));
+      card.innerHTML = `
+        <div class="list-card-stripe" style="background:${list.color}"></div>
+        <div class="list-card-body">
+          <div class="list-card-head">
+            <span class="list-card-name">${esc(list.name)}</span>
+            <div class="list-card-actions">
+              <button class="batch-action-btn" data-act="edit" title="Edit list">✎</button>
+              <button class="batch-action-btn delete-batch" data-act="del" title="Delete list">×</button>
+            </div>
+          </div>
+          <div class="list-card-counts">${open} open${done ? ' · ' + done + ' done' : ''}</div>
+          <div class="list-card-progress">
+            <div class="list-card-progress-fill" style="width:${pct}%;background:${list.color}"></div>
+          </div>
+        </div>`;
+
+      card.querySelector('[data-act="edit"]').addEventListener('click', e => {
+        e.stopPropagation();
+        openListModal(list.id);
+      });
+      card.querySelector('[data-act="del"]').addEventListener('click', e => {
+        e.stopPropagation();
+        deleteList(list.id);
+      });
+      grid.appendChild(card);
+    });
+
+    const add = document.createElement('div');
+    add.className = 'new-list-card';
+    add.textContent = '+ New list';
+    add.addEventListener('click', () => openListModal(null));
+    grid.appendChild(add);
+  }
+
+  function deleteList(id) {
+    const list = getList(id);
+    if (!list) return;
+    if (!confirm(`Delete "${list.name}"? This removes all its tasks and history.`)) return;
+    state.lists = state.lists.filter(l => l.id !== id);
+    delete sessionBatches[id];
+    if (state.lists.length === 0) {
+      state.lists.push(newList('Checklist', BRAND, []));
+    }
+    saveState();
+    renderHome();
+  }
+
+  // --- List create/edit modal ---------------------------------------------
+  function renderColorPicker() {
+    const cp = document.getElementById('colorPicker');
+    cp.innerHTML = '';
+    COLORS.forEach(c => {
+      const sw = document.createElement('div');
+      sw.className = 'color-swatch' + (c.hex === pickedColor ? ' selected' : '');
+      sw.style.background = c.hex;
+      sw.title = c.name;
+      sw.addEventListener('click', () => {
+        pickedColor = c.hex;
+        renderColorPicker();
+        document.getElementById('listModalSave').style.background = pickedColor;
+      });
+      cp.appendChild(sw);
+    });
+  }
+
+  function openListModal(id) {
+    editingListId = id || null;
+    const list = id ? getList(id) : null;
+    document.getElementById('listModalTitle').textContent = list ? 'Edit list' : 'New list';
+    document.getElementById('listNameField').value = list ? list.name : '';
+    pickedColor = list ? list.color : COLORS[0].hex;
+    renderColorPicker();
+    document.getElementById('listModalSave').style.background = pickedColor;
+    document.getElementById('listModalOverlay').classList.add('open');
+    setTimeout(() => document.getElementById('listNameField').focus(), 50);
+  }
+
+  function closeListModal() {
+    document.getElementById('listModalOverlay').classList.remove('open');
+  }
+
+  function saveListModal() {
+    const name = document.getElementById('listNameField').value.trim() || 'Untitled list';
+    if (editingListId) {
+      const list = getList(editingListId);
+      if (list) { list.name = name; list.color = pickedColor; }
+    } else {
+      state.lists.push(newList(name, pickedColor, []));
+    }
+    saveState();
+    closeListModal();
+    if (activeListId) {
+      applyTheme(activeList().color);
+      renderList();
+    } else {
+      renderHome();
+    }
+  }
+
+  // --- List view: tasks ----------------------------------------------------
   const input = document.getElementById('newTask');
   input.addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
 
   function addTask() {
+    const list = activeList();
+    if (!list) return;
     const text = input.value.trim();
     if (!text) return;
-    todos.push({ id: Date.now(), text });
+    list.todos.push({ id: uid(), text });
     logEvent('added', text);
     input.value = '';
     input.focus();
@@ -735,10 +1181,12 @@
     const el = document.querySelector(`[data-id="${id}"]`);
     if (el) el.classList.add('removing');
     setTimeout(() => {
-      const idx = todos.findIndex(t => t.id === id);
+      const list = activeList();
+      if (!list) return;
+      const idx = list.todos.findIndex(t => t.id === id);
       if (idx > -1) {
-        const task = todos.splice(idx, 1)[0];
-        completed.unshift(task);
+        const task = list.todos.splice(idx, 1)[0];
+        list.completed.unshift(task);
         logEvent('completed', task.text);
         saveState();
         render();
@@ -747,10 +1195,12 @@
   }
 
   function uncompleteTask(id) {
-    const idx = completed.findIndex(t => t.id === id);
+    const list = activeList();
+    if (!list) return;
+    const idx = list.completed.findIndex(t => t.id === id);
     if (idx > -1) {
-      const task = completed.splice(idx, 1)[0];
-      todos.push(task);
+      const task = list.completed.splice(idx, 1)[0];
+      list.todos.push(task);
       logEvent('restored', task.text);
       saveState();
       render();
@@ -758,39 +1208,35 @@
   }
 
   function restoreFromHistory(text, batchId, eventIdx) {
-    // Remove the event from batch history
-    const b = batches.find(x => x.id === batchId);
+    const list = activeList();
+    if (!list) return;
+    const b = list.batches.find(x => x.id === batchId);
     if (b) {
       b.events.splice(eventIdx, 1);
-      // If batch is now empty, remove it entirely
-      if (b.events.length === 0) {
-        batches = batches.filter(x => x.id !== batchId);
-      }
+      if (b.events.length === 0) list.batches = list.batches.filter(x => x.id !== batchId);
     }
-
-    // Add to active list if not already there
-    const compIdx = completed.findIndex(t => t.text === text);
+    const compIdx = list.completed.findIndex(t => t.text === text);
     if (compIdx > -1) {
-      const task = completed.splice(compIdx, 1)[0];
-      todos.push(task);
-    } else if (!todos.some(t => t.text === text)) {
-      todos.push({ id: Date.now(), text });
+      list.todos.push(list.completed.splice(compIdx, 1)[0]);
+    } else if (!list.todos.some(t => t.text === text)) {
+      list.todos.push({ id: uid(), text });
     }
-
     saveState();
     render();
   }
 
   function deleteTask(id, fromCompleted) {
+    const list = activeList();
+    if (!list) return;
     let text = '';
     if (fromCompleted) {
-      const t = completed.find(t => t.id === id);
+      const t = list.completed.find(t => t.id === id);
       if (t) text = t.text;
-      completed = completed.filter(t => t.id !== id);
+      list.completed = list.completed.filter(t => t.id !== id);
     } else {
-      const t = todos.find(t => t.id === id);
+      const t = list.todos.find(t => t.id === id);
       if (t) text = t.text;
-      todos = todos.filter(t => t.id !== id);
+      list.todos = list.todos.filter(t => t.id !== id);
     }
     if (text) logEvent('deleted', text);
     saveState();
@@ -809,15 +1255,19 @@
 
   function deleteBatch(batchId, e) {
     e.stopPropagation();
-    batches = batches.filter(b => b.id !== batchId);
+    const list = activeList();
+    if (!list) return;
+    list.batches = list.batches.filter(b => b.id !== batchId);
     saveState();
     render();
   }
 
   function renameBatch(batchId, e) {
     e.stopPropagation();
+    const list = activeList();
+    if (!list) return;
     const nameEl = document.querySelector(`[data-batch-name="${batchId}"]`);
-    const current = batches.find(b => b.id === batchId);
+    const current = list.batches.find(b => b.id === batchId);
     if (!nameEl || !current) return;
 
     const inp = document.createElement('input');
@@ -842,17 +1292,17 @@
   }
 
   function clearAllHistory() {
-    if (!confirm('Clear all history? This cannot be undone.')) return;
-    batches = [];
-    currentBatchId = null;
+    if (!confirm('Clear all history for this list? This cannot be undone.')) return;
+    const list = activeList();
+    if (!list) return;
+    list.batches = [];
+    delete sessionBatches[list.id];
+    ensureBatch(list);
     saveState();
-    startBatch();
     render();
   }
 
   // Drag reorder
-  let dragId = null;
-
   function onDragStart(e, id) {
     dragId = id;
     e.dataTransfer.effectAllowed = 'move';
@@ -880,11 +1330,13 @@
   function onDrop(e, targetId) {
     e.preventDefault();
     if (dragId == null || dragId === targetId) return;
-    const fromIdx = todos.findIndex(t => t.id === dragId);
-    const toIdx = todos.findIndex(t => t.id === targetId);
+    const list = activeList();
+    if (!list) return;
+    const fromIdx = list.todos.findIndex(t => t.id === dragId);
+    const toIdx = list.todos.findIndex(t => t.id === targetId);
     if (fromIdx < 0 || toIdx < 0) return;
-    const [moved] = todos.splice(fromIdx, 1);
-    todos.splice(toIdx, 0, moved);
+    const [moved] = list.todos.splice(fromIdx, 1);
+    list.todos.splice(toIdx, 0, moved);
     dragId = null;
     saveState();
     render();
@@ -927,13 +1379,14 @@
     return div;
   }
 
-  function esc(s) {
-    const d = document.createElement('div');
-    d.textContent = s;
-    return d.innerHTML;
-  }
+  function renderList() {
+    const list = activeList();
+    if (!list) return;
+    const todos = list.todos, completed = list.completed, batches = list.batches;
+    const curBatch = sessionBatches[list.id];
 
-  function render() {
+    document.getElementById('listTitle').textContent = list.name;
+
     const todoList = document.getElementById('todoList');
     const completedList = document.getElementById('completedList');
     const emptyState = document.getElementById('emptyState');
@@ -956,7 +1409,7 @@
     if (completedOpen) completedList.style.maxHeight = completedList.scrollHeight + 'px';
 
     // History
-    const pastBatches = batches.filter(b => b.id !== currentBatchId && b.events.length > 0);
+    const pastBatches = batches.filter(b => b.id !== curBatch && b.events.length > 0);
     const historySection = document.getElementById('historySection');
     const batchListEl = document.getElementById('batchList');
 
@@ -1000,13 +1453,12 @@
 
       batchListEl.appendChild(card);
 
-      // Bind restore buttons
       card.querySelectorAll('.restore-btn').forEach(btn => {
         btn.addEventListener('click', function(e) {
           e.stopPropagation();
           const bId = Number(btn.dataset.restoreBatch);
           const eIdx = Number(btn.dataset.restoreIdx);
-          const b = batches.find(x => x.id === bId);
+          const b = list.batches.find(x => x.id === bId);
           if (b && b.events[eIdx]) {
             restoreFromHistory(b.events[eIdx].text, bId, eIdx);
           }
@@ -1020,6 +1472,7 @@
     });
   }
 
+  // --- Changelog -----------------------------------------------------------
   function renderVersion() {
     document.getElementById('versionFooter').textContent = 'v' + APP_VERSION;
     document.getElementById('changelogBody').innerHTML = CHANGELOG.map(entry => `
@@ -1043,16 +1496,26 @@
     document.getElementById('changelogOverlay').classList.remove('open');
   }
 
+  // --- Wiring --------------------------------------------------------------
   document.getElementById('changelogOverlay').addEventListener('click', e => {
     if (e.target.id === 'changelogOverlay') closeChangelog();
   });
 
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') closeChangelog();
+  document.getElementById('listModalOverlay').addEventListener('click', e => {
+    if (e.target.id === 'listModalOverlay') closeListModal();
   });
 
+  document.getElementById('listNameField').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); saveListModal(); }
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeChangelog(); closeListModal(); }
+  });
+
+  applyTheme(BRAND);
   renderVersion();
-  render();
+  goHome();
 </script>
 </body>
 </html>
