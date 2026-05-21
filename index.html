@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Checklist</title>
+<title>JotList.io</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23F05726'/%3E%3Cpolyline points='9,16.5 14,21.5 23,10.5' fill='none' stroke='%23ffffff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Checklist">
+<meta name="apple-mobile-web-app-title" content="JotList">
 <meta name="theme-color" content="#F05726">
 <style>
   * {
@@ -1131,7 +1131,7 @@
 <!-- HOME VIEW -->
 <div class="view" id="homeView"><div class="view-inner">
   <div class="header">
-    <h1>Lists</h1>
+    <h1>JotLists</h1>
     <div class="count" id="listCount"></div>
   </div>
   <div class="list-grid" id="listGrid"></div>
@@ -1244,6 +1244,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.4.4', date: '2026-05-21', changes: [
+      'New name — say hello to JotList',
+    ]},
     { version: '1.4.3', date: '2026-05-21', changes: [
       'Completed tasks slide down into History',
       'History is one list now — collapsible, no session groups',
@@ -1316,6 +1319,9 @@
   ];
   const APP_VERSION = CHANGELOG[0].version;
 
+  // Sample tasks a brand-new install starts with.
+  const DEFAULT_TODOS = ['Jot 1', 'Jot 2', 'Jot 3'];
+
   // --- ID helper -----------------------------------------------------------
   let idSeq = 0;
   function uid() { return Date.now() * 1000 + (idSeq++ % 1000); }
@@ -1341,11 +1347,11 @@
     } else if (raw && Array.isArray(raw.todos)) {
       // Migrate the old single-list format into the first list.
       st = { lists: [{
-        id: uid(), name: 'Checklist', color: BRAND,
+        id: uid(), name: 'JotList', color: BRAND,
         todos: raw.todos || [], completed: raw.completed || [], batches: raw.batches || [],
       }] };
     } else {
-      st = { lists: [ newList('Checklist', BRAND, []) ] };
+      st = { lists: [ newList('JotList', BRAND, DEFAULT_TODOS) ] };
     }
 
     // Completed tasks live in one flat list; migrate any old session "batches".
@@ -1690,7 +1696,7 @@
       onConfirm: () => {
         state.lists = state.lists.filter(l => l.id !== id);
         if (state.lists.length === 0) {
-          state.lists.push(newList('Checklist', BRAND, []));
+          state.lists.push(newList('JotList', BRAND, []));
         }
         saveState();
         renderHome();

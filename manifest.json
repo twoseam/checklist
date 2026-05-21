@@ -1,6 +1,6 @@
 {
-  "name": "Checklist",
-  "short_name": "Checklist",
+  "name": "JotList",
+  "short_name": "JotList",
   "description": "A simple multi-list checklist.",
   "start_url": "./",
   "scope": "./",
