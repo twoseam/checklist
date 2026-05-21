@@ -41,28 +41,23 @@
     --radius-xs: 3px;
   }
 
-  html, body {
+  html {
     height: 100%;
-  }
-
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
-    background: #F05726;
-    color: var(--text);
-    -webkit-font-smoothing: antialiased;
     overflow: hidden;
   }
 
-  /* Full-screen animated backdrop. Sized past the viewport so it covers the
-     home-indicator strip iOS leaves uncovered in the installed app. */
-  #bgLayer {
-    position: fixed;
-    top: 0; left: 0; right: 0;
-    height: calc(var(--app-h, 100%) + 120px);
+  /* The animated gradient lives on <body> — the page's main background, which
+     iOS reliably fills edge-to-edge in the installed app. Its box is pinned to
+     the real screen height (--app-h) so it covers the home-indicator strip. */
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+    height: var(--app-h, 100%);
     background: var(--app-bg, #F05726);
     background-size: 300vw 300vh;
     animation: bgDrift 22s ease-in-out infinite;
-    z-index: 0;
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
   }
 
   @keyframes bgDrift {
@@ -71,7 +66,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    #bgLayer, .list-card-badge { animation: none; }
+    body, .list-card-badge { animation: none; }
     #listView { transition: none; }
   }
 
@@ -870,8 +865,6 @@
 </head>
 <body>
 
-<div id="bgLayer"></div>
-
 <!-- HOME VIEW -->
 <div class="view" id="homeView"><div class="view-inner">
   <div class="header">
@@ -964,6 +957,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.3.9', date: '2026-05-21', changes: [
+      'Animated background now fills the whole screen — no band',
+    ]},
     { version: '1.3.8', date: '2026-05-21', changes: [
       'Fixed the white strip at the bottom of the installed app',
       'Swipe a task left to tick it off',

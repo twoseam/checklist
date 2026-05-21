@@ -11,7 +11,7 @@ vanilla JS, no build step, no framework, no dependencies.
 - **Live:** https://twoseam.github.io/checklist/
 - **Repo:** https://github.com/twoseam/checklist
 - **Deploy:** push to `main` → GitHub Pages auto-publishes (~1–2 min).
-- **Version:** v1.3.8 in code (in-app changelog: tap the version number).
+- **Version:** v1.3.9 in code (in-app changelog: tap the version number).
 
 ## Files
 
@@ -64,15 +64,20 @@ Orange `#F05726` · Purple `#7226F0` · Teal `#26F0C1` · Yellow `#E5B82B` · Br
 
 ## Resolved
 
-- **iOS standalone background gap (FIXED v1.3.8).** In the installed app the
-  bottom ~62px showed white. Diagnosed with an on-screen readout: in standalone
-  PWA, `innerHeight`/`body` height = 894px but `screen.height` = 956px, so the
-  `body`-painted gradient stopped 62px short. Fix: the animated gradient moved
-  off `body` onto a dedicated `#bgLayer` — `position: fixed`, `height:
-  calc(var(--app-h) + 120px)` — which overshoots the screen edge. `--app-h` is
-  `max(innerHeight, screen.height)`. `body` keeps a solid-color fallback only.
-  ⚠️ Diagnosis is conclusive (real numbers), but the v1.3.8 fix itself is not
-  yet confirmed on-device — needs one screenshot of the installed app.
+- **iOS standalone background gap (FIXED v1.3.9).** In the installed app the
+  bottom ~62px showed a wrong colour. Diagnosed with an on-screen readout: in
+  standalone PWA, `innerHeight`/`body` height = 894px but `screen.height` =
+  956px, so the gradient stopped 62px short.
+  - v1.3.8 tried a separate `position: fixed` `#bgLayer` — iOS clips fixed
+    elements to the 894px layout viewport, so it left a 62px band. Don't use a
+    fixed layer for the backdrop.
+  - v1.3.9 fix (works): the animated gradient lives on `<body>` — the page's
+    main background, which iOS fills edge-to-edge — and `body` height is pinned
+    to `var(--app-h)` (= `max(innerHeight, screen.height)`, 956px) so it is
+    tall enough. `html` gets `overflow: hidden` so the taller body can't
+    scroll. The gradient still animates (`bgDrift`, `background-size: 300vw
+    300vh`); it is NOT a solid colour.
+  ⚠️ Confirm once on-device with a screenshot of the installed app.
 
 ## Caveats / accepted tradeoffs
 
