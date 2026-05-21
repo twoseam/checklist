@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Checklist</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23F05726'/%3E%3Cpolyline points='9,16.5 14,21.5 23,10.5' fill='none' stroke='%23ffffff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>
@@ -36,14 +36,10 @@
 
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
-    background: var(--bg);
-    background-size: 300% 300%;
+    background: #2a2118;
     color: var(--text);
-    min-height: 100vh;
-    padding: 48px 20px 80px;
     -webkit-font-smoothing: antialiased;
-    transition: background 0.25s ease;
-    animation: bgDrift 22s ease-in-out infinite;
+    overflow: hidden;
   }
 
   @keyframes bgDrift {
@@ -52,12 +48,40 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    body, .list-card-badge { animation: none; }
+    #homeView, .list-card-badge { animation: none; }
+    #listView { transition: none; }
   }
 
-  .container {
+  .view {
+    position: fixed;
+    inset: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  #homeView {
+    background: var(--home-bg, #F05726);
+    background-size: 300% 300%;
+    animation: bgDrift 22s ease-in-out infinite;
+  }
+
+  #listView {
+    background: var(--list-bg, #F05726);
+    z-index: 5;
+    transform: translateX(calc(100% + 40px));
+    transition: transform 0.34s cubic-bezier(0.32, 0.72, 0, 1);
+    box-shadow: -10px 0 32px rgba(0,0,0,0.22);
+    will-change: transform;
+  }
+
+  #listView.active { transform: translateX(0); }
+  #listView.dragging { transition: none; }
+
+  .view-inner {
     max-width: 520px;
     margin: 0 auto;
+    padding: 48px 20px 80px;
   }
 
   /* Header */
@@ -573,6 +597,13 @@
   .batch-task-icon.deleted { background: var(--red); }
   .batch-task-icon.restored { background: var(--pink); }
 
+  .batch-task-icon.restore-icon {
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+
+  .batch-task-icon.restore-icon:hover { transform: scale(1.18); }
+
   .batch-task-text {
     flex: 1;
   }
@@ -620,14 +651,17 @@
     position: fixed;
     inset: 0;
     background: rgba(42,33,24,0.55);
-    display: none;
+    display: flex;
     align-items: center;
     justify-content: center;
     padding: 24px;
     z-index: 100;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s;
   }
 
-  .overlay.open { display: flex; }
+  .overlay.open { opacity: 1; visibility: visible; }
 
   .modal {
     background: var(--surface);
@@ -637,7 +671,11 @@
     max-height: 80vh;
     overflow-y: auto;
     padding: 20px 22px 24px;
+    transform: translateY(10px) scale(0.98);
+    transition: transform 0.24s cubic-bezier(0.32, 0.72, 0, 1);
   }
+
+  .overlay.open .modal { transform: translateY(0) scale(1); }
 
   .modal-header {
     display: flex;
@@ -799,17 +837,17 @@
 <body>
 
 <!-- HOME VIEW -->
-<div class="container" id="homeView">
+<div class="view" id="homeView"><div class="view-inner">
   <div class="header">
     <h1>Lists</h1>
     <div class="count" id="listCount"></div>
   </div>
   <div class="list-grid" id="listGrid"></div>
   <div class="version-footer" id="versionFooter" onclick="openChangelog()" title="View changelog"></div>
-</div>
+</div></div>
 
 <!-- LIST VIEW -->
-<div class="container" id="listView" style="display:none;">
+<div class="view" id="listView"><div class="view-inner">
   <button class="back-btn" onclick="goHome()">← All lists</button>
   <div class="header">
     <h1 id="listTitle" class="editable" onclick="openListModal(activeListId)" title="Edit list"></h1>
@@ -831,7 +869,7 @@
     </div>
     <div id="batchList"></div>
   </div>
-</div>
+</div></div>
 
 <!-- CHANGELOG MODAL -->
 <div class="overlay" id="changelogOverlay">
@@ -899,6 +937,9 @@
       'Checked tasks go straight to history',
       'Animated badge when a list is fully done',
       'Branded confirm dialogs (no system popups)',
+      'Click a history check to restore it',
+      'Swipe right on a list to go back',
+      'Smooth sliding views and dialogs',
     ]},
     { version: '1.2.0', date: '2026-05-21', changes: [
       'Multiple named lists',
@@ -1030,18 +1071,26 @@
     return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6;
   }
 
-  function applyTheme(color) {
-    const s = document.documentElement.style;
+  // Theme the list view to one color. --accent is a version readable on white.
+  function themeList(color) {
+    const lv = document.getElementById('listView');
     const light = isLight(color);
-    // --bg is the true color; --accent is a version readable on white surfaces.
     const ink = light ? shade(color, -0.5) : color;
-    s.setProperty('--bg', color);
-    s.setProperty('--accent', ink);
-    s.setProperty('--accent-hover', shade(ink, -0.15));
-    s.setProperty('--accent-soft', ink + '1f');
-    s.setProperty('--border', ink);
-    s.setProperty('--border-light', ink + '30');
-    s.setProperty('--on-bg', light ? '#2a2118' : '#fff');
+    lv.style.setProperty('--list-bg', color);
+    lv.style.setProperty('--accent', ink);
+    lv.style.setProperty('--accent-hover', shade(ink, -0.15));
+    lv.style.setProperty('--accent-soft', ink + '1f');
+    lv.style.setProperty('--border', ink);
+    lv.style.setProperty('--border-light', ink + '30');
+    lv.style.setProperty('--on-bg', light ? '#2a2118' : '#fff');
+  }
+
+  // Theme the home view to the blend of all list colors.
+  function themeHome() {
+    const hv = document.getElementById('homeView');
+    const first = state.lists[0];
+    hv.style.setProperty('--home-bg', homeGradient());
+    hv.style.setProperty('--on-bg', first && isLight(first.color) ? '#2a2118' : '#fff');
   }
 
   // Home backdrop: a soft gradient of the lists' own colors. The body slowly
@@ -1103,9 +1152,7 @@
   function goHome() {
     endSession();
     activeListId = null;
-    applyTheme(BRAND);
-    document.getElementById('listView').style.display = 'none';
-    document.getElementById('homeView').style.display = 'block';
+    document.getElementById('listView').classList.remove('active');
     renderHome();
   }
 
@@ -1116,11 +1163,11 @@
     activeListId = id;
     openBatches = {};
     ensureBatch(list);
-    applyTheme(list.color);
-    document.getElementById('homeView').style.display = 'none';
-    document.getElementById('listView').style.display = 'block';
+    themeList(list.color);
     renderList();
-    document.getElementById('newTask').focus();
+    const lv = document.getElementById('listView');
+    lv.scrollTop = 0;
+    lv.classList.add('active');
   }
 
   function render() {
@@ -1130,10 +1177,7 @@
 
   // --- Home view -----------------------------------------------------------
   function renderHome() {
-    const rootStyle = document.documentElement.style;
-    rootStyle.setProperty('--bg', homeGradient());
-    const first = state.lists[0];
-    rootStyle.setProperty('--on-bg', first && isLight(first.color) ? '#2a2118' : '#fff');
+    themeHome();
     const grid = document.getElementById('listGrid');
     const count = document.getElementById('listCount');
     count.textContent = state.lists.length + (state.lists.length === 1 ? ' list' : ' lists');
@@ -1301,7 +1345,7 @@
     saveState();
     closeListModal();
     if (activeListId) {
-      applyTheme(activeList().color);
+      themeList(activeList().color);
       renderList();
     } else {
       renderHome();
@@ -1540,11 +1584,14 @@
         };
         const icon = svgIcons[ev.action] || svgIcons.added;
         const dotClass = ev.action === 'added' ? 'added' : ev.action === 'completed' ? 'completed' : ev.action === 'deleted' ? 'deleted' : 'restored';
-        const restoreBtn = `<button class="restore-btn" data-restore-batch="${batch.id}" data-restore-idx="${idx}">Restore</button>`;
+        const restoreData = `data-restore-batch="${batch.id}" data-restore-idx="${idx}"`;
+        const iconEl = ev.action === 'completed'
+          ? `<span class="batch-task-icon ${dotClass} restore-icon" ${restoreData} title="Uncheck & restore">${icon}</span>`
+          : `<span class="batch-task-icon ${dotClass}">${icon}</span>`;
         return `<div class="batch-task">
-          <span class="batch-task-icon ${dotClass}">${icon}</span>
+          ${iconEl}
           <span class="batch-task-text">${esc(ev.text)}</span>
-          ${restoreBtn}
+          <button class="restore-btn" ${restoreData}>Restore</button>
         </div>`;
       }).join('');
 
@@ -1563,11 +1610,11 @@
 
       batchListEl.appendChild(card);
 
-      card.querySelectorAll('.restore-btn').forEach(btn => {
-        btn.addEventListener('click', function(e) {
+      card.querySelectorAll('[data-restore-batch]').forEach(el => {
+        el.addEventListener('click', function(e) {
           e.stopPropagation();
-          const bId = Number(btn.dataset.restoreBatch);
-          const eIdx = Number(btn.dataset.restoreIdx);
+          const bId = Number(el.dataset.restoreBatch);
+          const eIdx = Number(el.dataset.restoreIdx);
           const b = list.batches.find(x => x.id === bId);
           if (b && b.events[eIdx]) {
             restoreFromHistory(b.events[eIdx].text, bId, eIdx);
@@ -1651,7 +1698,56 @@
     if (e.key === 'Escape') { closeChangelog(); closeListModal(); closeConfirm(); }
   });
 
-  applyTheme(BRAND);
+  // Swipe a list to the right to slide back to all lists.
+  (function () {
+    const lv = document.getElementById('listView');
+    let startX = 0, startY = 0, startT = 0, dx = 0;
+    let tracking = false, decided = false, horizontal = false;
+    const vw = () => window.innerWidth;
+
+    lv.addEventListener('touchstart', e => {
+      if (!activeListId || e.touches.length !== 1) { tracking = false; return; }
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      startT = Date.now();
+      dx = 0; tracking = true; decided = false; horizontal = false;
+    }, { passive: true });
+
+    lv.addEventListener('touchmove', e => {
+      if (!tracking) return;
+      const mx = e.touches[0].clientX - startX;
+      const my = e.touches[0].clientY - startY;
+      if (!decided) {
+        if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
+        decided = true;
+        horizontal = mx > 0 && Math.abs(mx) > Math.abs(my);
+        if (horizontal) {
+          lv.classList.add('dragging');
+          renderHome();
+        }
+      }
+      if (!horizontal) return;
+      e.preventDefault();
+      dx = Math.max(0, mx);
+      lv.style.transform = 'translateX(' + dx + 'px)';
+    }, { passive: false });
+
+    function endSwipe() {
+      if (!tracking) return;
+      tracking = false;
+      if (!horizontal) return;
+      lv.classList.remove('dragging');
+      const v = dx / Math.max(Date.now() - startT, 1);
+      lv.style.transform = '';
+      if (dx > vw() * 0.32 || (v > 0.55 && dx > 45)) {
+        goHome();
+      }
+      dx = 0;
+    }
+    lv.addEventListener('touchend', endSwipe);
+    lv.addEventListener('touchcancel', endSwipe);
+  })();
+
   renderVersion();
   goHome();
 </script>
