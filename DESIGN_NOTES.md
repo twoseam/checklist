@@ -11,7 +11,7 @@ vanilla JS, no build step, no framework, no dependencies.
 - **Live:** https://twoseam.github.io/checklist/
 - **Repo:** https://github.com/twoseam/checklist
 - **Deploy:** push to `main` → GitHub Pages auto-publishes (~1–2 min).
-- **Version:** v1.3.10 in code (in-app changelog: tap the version number).
+- **Version:** v1.4.3 in code (in-app changelog: tap the version number).
 
 ## Files
 

@@ -13,7 +13,19 @@
 <meta name="apple-mobile-web-app-title" content="Checklist">
 <meta name="theme-color" content="#F05726">
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Text stays selectable only where you're actually typing. */
+  input { -webkit-user-select: text; user-select: text; }
 
   :root {
     --bg: #F05726;
@@ -66,7 +78,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    body, .list-card-badge { animation: none; }
+    body, .list-card-badge, .card-inner { animation: none; }
     #listView { transition: none; }
   }
 
@@ -105,6 +117,25 @@
       calc(20px + env(safe-area-inset-right, 0px))
       calc(80px + env(safe-area-inset-bottom, 0px))
       calc(20px + env(safe-area-inset-left, 0px));
+  }
+
+  /* Extra room at the bottom so cards never hide behind the pinned footer. */
+  #homeView .view-inner { padding-bottom: calc(116px + env(safe-area-inset-bottom, 0px)); }
+
+  /* Settings gear + version, pinned to the bottom of the window on the home
+     screen. It sits inside #homeView so the list view slides cleanly over it. */
+  .home-footer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 9px;
+    padding: 12px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+    pointer-events: none;
   }
 
   /* Header */
@@ -158,6 +189,12 @@
     gap: 10px;
   }
 
+  /* Desktop: a roomier page, 4 cards per row. */
+  @media (min-width: 720px) {
+    #homeView .view-inner { max-width: 900px; }
+    .list-grid { grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  }
+
   .list-card {
     background: var(--surface);
     border-radius: var(--radius);
@@ -175,8 +212,31 @@
     box-shadow: 0 6px 18px rgba(0,0,0,0.14);
   }
 
-  .list-card.dragging { opacity: 0.3; }
-  .list-card.drag-over { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--accent); }
+  .list-card.pressing { transform: scale(0.95); }
+  .list-card.dragging { opacity: 0; }
+
+  /* The floating clone that follows your finger while dragging a card. */
+  .list-card.lifted {
+    position: fixed;
+    margin: 0;
+    z-index: 300;
+    pointer-events: none;
+    cursor: grabbing;
+    box-shadow: 0 22px 46px rgba(0,0,0,0.34);
+    transition: none;
+  }
+
+  /* Inner wrapper holds the iOS-style wiggle, so it never fights the
+     slide animation that runs on the card itself. */
+  .card-inner {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .list-grid.reordering .list-card:hover { transform: none; }
 
   .list-card-stripe { height: 6px; width: 100%; flex-shrink: 0; }
 
@@ -190,7 +250,7 @@
 
   .list-card-head {
     display: flex;
-    align-items: baseline;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 8px;
   }
@@ -203,15 +263,63 @@
 
   .list-card-actions {
     display: flex;
-    gap: 4px;
+    gap: 6px;
     flex-shrink: 0;
   }
 
-  .list-card-actions .batch-action-btn {
-    font-size: 1.05rem;
-    line-height: 1;
-    padding: 7px 10px;
+  /* Playful round icon buttons on each card. */
+  .card-icon-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    background: var(--accent-soft);
+    color: var(--accent);
+    transition: transform 0.13s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.13s;
   }
+
+  .card-icon-btn:hover { transform: scale(1.18) rotate(-8deg); }
+  .card-icon-btn:active { transform: scale(0.88); }
+  .card-icon-btn.danger { background: var(--red-soft); color: var(--red); }
+  .card-icon-btn.danger:hover { transform: scale(1.18) rotate(8deg); }
+
+  /* List card ⋯ menu */
+  .card-menu {
+    position: fixed;
+    z-index: 95;
+    display: none;
+    flex-direction: column;
+    min-width: 150px;
+    background: var(--surface);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.26);
+    padding: 5px;
+  }
+
+  .card-menu.open { display: flex; }
+
+  .card-menu-item {
+    background: none;
+    border: none;
+    font-family: inherit;
+    font-size: 0.84rem;
+    font-weight: 600;
+    text-align: left;
+    color: var(--text);
+    padding: 10px 12px;
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+
+  .card-menu-item:hover { background: var(--surface-alt); }
+  .card-menu-item.danger { color: var(--red); }
+  .card-menu-item.danger:hover { background: var(--red-soft); }
 
   .list-card-counts {
     font-size: 0.72rem;
@@ -351,37 +459,65 @@
   .task-list:empty { display: none; }
 
   .task-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 14px 16px;
-    cursor: default;
-    user-select: none;
-    transition: opacity 0.2s, transform 0.2s, background 0.1s;
+    position: relative;
+    overflow: hidden;
     border-bottom: 1px solid var(--border-subtle);
   }
 
   .task-item:last-child { border-bottom: none; }
-  .task-item:hover { background: var(--surface-alt); }
   .task-item.dragging { opacity: 0.2; }
   .task-item.drag-over { box-shadow: inset 0 2px 0 0 var(--accent); }
+  .task-item.exiting { transition: max-height 0.26s ease; }
 
-  .task-item.removing {
-    opacity: 0;
-    transform: translateX(14px);
-  }
-
-  /* Swipe-left to complete */
-  .task-item.swiping { transition: none; background: var(--surface-alt); }
-  .task-item.will-complete { background: var(--green-soft); }
-
-  .task-item.adding {
-    animation: fadeUp 0.2s ease-out;
-  }
+  .task-item.adding { animation: fadeUp 0.28s cubic-bezier(0.34, 1.35, 0.64, 1); }
 
   @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(-4px); }
-    to { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; transform: translateY(-9px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  /* Colour reveal behind a row while it is being swiped */
+  .task-action-bg {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 22px;
+    background: var(--surface-alt);
+  }
+
+  .task-action-bg .ta-icon {
+    display: flex;
+    opacity: 0;
+    transition: opacity 0.12s, transform 0.12s;
+  }
+
+  .ta-complete { color: var(--green); }
+  .ta-delete { color: var(--red); }
+  .task-action-bg.show-complete { background: var(--green-soft); }
+  .task-action-bg.show-complete .ta-complete { opacity: 1; }
+  .task-action-bg.show-delete { background: var(--red-soft); }
+  .task-action-bg.show-delete .ta-delete { opacity: 1; }
+  .task-action-bg.armed.show-complete { background: var(--green); }
+  .task-action-bg.armed.show-delete { background: var(--red); }
+  .task-action-bg.armed .ta-icon { color: #fff; transform: scale(1.3); }
+
+  /* Sliding foreground of a row */
+  .task-face {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--surface);
+  }
+
+  .task-face:hover { background: var(--surface-alt); }
+
+  .task-item.swiping .task-face {
+    transition: none;
+    box-shadow: 0 0 16px rgba(0,0,0,0.16);
   }
 
   /* Drag handle */
@@ -396,7 +532,7 @@
   }
 
   .drag-handle:active { cursor: grabbing; }
-  .task-item:hover .drag-handle { opacity: 1; }
+  .task-face:hover .drag-handle { opacity: 1; }
 
   /* Checkbox */
   .checkbox {
@@ -412,7 +548,7 @@
     transition: all 0.15s;
   }
 
-  .task-item:hover .checkbox { border-color: var(--accent-hover); }
+  .task-face:hover .checkbox { border-color: var(--accent-hover); }
 
   .checkbox svg {
     width: 10px;
@@ -421,28 +557,14 @@
     transition: opacity 0.12s;
   }
 
-  .task-item.done .checkbox {
-    background: var(--accent);
-    border-color: var(--accent);
-  }
-
-  .task-item.done .checkbox svg {
-    opacity: 1;
-    stroke: #fff;
-  }
-
   /* Task text */
   .task-text {
     font-size: 0.88rem;
     flex: 1;
-    cursor: pointer;
+    min-width: 0;
+    overflow-wrap: anywhere;
     color: var(--text);
     font-weight: 400;
-  }
-
-  .task-item.done .task-text {
-    text-decoration: line-through;
-    color: var(--text-dim);
   }
 
   /* Delete */
@@ -455,11 +577,107 @@
     padding: 2px 5px;
     font-size: 0.85rem;
     line-height: 1;
+    flex-shrink: 0;
     transition: opacity 0.12s, color 0.12s;
   }
 
-  .task-item:hover .delete-btn { opacity: 1; }
+  .task-face:hover .delete-btn { opacity: 1; }
   .delete-btn:hover { color: var(--red); }
+
+  /* Full-screen colour flash on complete / delete */
+  .color-pop {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    pointer-events: none;
+    animation: colorPop 0.5s ease forwards;
+  }
+
+  @keyframes colorPop {
+    0% { opacity: 0; }
+    22% { opacity: 0.26; }
+    100% { opacity: 0; }
+  }
+
+  /* History — completed tasks, one flat list */
+  .done-list {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .done-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .done-item:last-child { border-bottom: none; }
+
+  .done-check {
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    background: var(--green);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.12s;
+  }
+
+  .done-check:hover { transform: scale(1.14); }
+  .done-check svg { width: 11px; height: 11px; }
+
+  .done-text {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-size: 0.84rem;
+    color: var(--text-dim);
+    text-decoration: line-through;
+  }
+
+  .done-del {
+    opacity: 0.4;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 2px 5px;
+    font-size: 0.85rem;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: opacity 0.12s, color 0.12s;
+  }
+
+  .done-item:hover .done-del { opacity: 1; }
+  .done-del:hover { color: var(--red); }
+
+  .done-enter { animation: doneEnter 0.4s cubic-bezier(0.34, 1.3, 0.64, 1); }
+  @keyframes doneEnter {
+    from { opacity: 0; transform: translateY(-12px) scale(0.92); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  /* A row clone that swirls down into History when a task is completed */
+  .swirl-clone {
+    z-index: 60;
+    pointer-events: none;
+    border-radius: var(--radius-sm);
+    box-shadow: 0 10px 28px rgba(0,0,0,0.22);
+    transition: transform 0.4s cubic-bezier(0.4,0,0.6,1), opacity 0.34s ease 0.1s;
+  }
+
+  .swirl-clone.go {
+    transform: translateY(150px) scale(0.94);
+    opacity: 0;
+  }
 
   /* Empty state */
   .empty-state {
@@ -479,14 +697,36 @@
   .history-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 7px;
     margin-bottom: 14px;
+    cursor: pointer;
   }
 
   .history-title {
     font-size: 1.1rem;
     font-weight: 700;
     color: var(--on-bg);
+  }
+
+  .history-chevron {
+    font-size: 0.5rem;
+    color: color-mix(in srgb, var(--on-bg) 60%, transparent);
+    transition: transform 0.2s;
+  }
+
+  .history-chevron.open { transform: rotate(90deg); }
+
+  .history-count {
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: color-mix(in srgb, var(--on-bg) 55%, transparent);
+    font-variant-numeric: tabular-nums;
+    margin-right: auto;
+  }
+
+  #completedList {
+    overflow: hidden;
+    transition: max-height 0.3s ease;
   }
 
   .clear-all-btn {
@@ -663,7 +903,7 @@
   /* Version + changelog */
   .version-footer {
     text-align: center;
-    margin-top: 32px;
+    pointer-events: auto;
     font-size: 0.68rem;
     font-weight: 600;
     color: color-mix(in srgb, var(--on-bg) 45%, transparent);
@@ -675,6 +915,29 @@
   }
 
   .version-footer:hover { color: color-mix(in srgb, var(--on-bg) 90%, transparent); }
+
+  /* Settings gear */
+  .settings-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: none;
+    background: color-mix(in srgb, var(--on-bg) 14%, transparent);
+    color: var(--on-bg);
+    cursor: pointer;
+    transition: background 0.15s, transform 0.25s ease;
+  }
+
+  .settings-btn:hover {
+    background: color-mix(in srgb, var(--on-bg) 24%, transparent);
+    transform: rotate(45deg);
+  }
+
+  .settings-btn:active { transform: rotate(45deg) scale(0.9); }
 
   .overlay {
     position: fixed;
@@ -872,6 +1135,11 @@
     <div class="count" id="listCount"></div>
   </div>
   <div class="list-grid" id="listGrid"></div>
+  </div>
+  <div class="home-footer">
+  <button class="settings-btn" id="settingsBtn" onclick="openSettings()" title="Settings" aria-label="Settings">
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  </button>
   <div class="version-footer" id="versionFooter" onclick="openChangelog()" title="View changelog"></div>
 </div></div>
 
@@ -892,11 +1160,13 @@
   <div class="empty-state" id="emptyState">No tasks yet</div>
 
   <div class="history-section" id="historySection" style="display:none;">
-    <div class="history-header">
+    <div class="history-header" onclick="toggleHistory()">
+      <span class="history-chevron" id="historyChevron">▶</span>
       <span class="history-title">History</span>
-      <button class="clear-all-btn" onclick="clearAllHistory()">Clear All</button>
+      <span class="history-count" id="historyCount"></span>
+      <button class="clear-all-btn" onclick="event.stopPropagation();clearAllHistory()">Clear All</button>
     </div>
-    <div id="batchList"></div>
+    <div id="completedList" class="done-list"></div>
   </div>
 </div></div>
 
@@ -908,6 +1178,17 @@
       <button class="modal-close" onclick="closeChangelog()" title="Close">×</button>
     </div>
     <div id="changelogBody"></div>
+  </div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div class="overlay" id="settingsOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Settings</span>
+      <button class="modal-close" onclick="closeSettings()" title="Close">×</button>
+    </div>
+    <p class="confirm-message" style="margin-bottom:0;">Nothing here yet.</p>
   </div>
 </div>
 
@@ -944,6 +1225,12 @@
   </div>
 </div>
 
+<!-- LIST CARD ⋯ MENU -->
+<div class="card-menu" id="cardMenu">
+  <button class="card-menu-item" data-act="edit">Edit list</button>
+  <button class="card-menu-item danger" data-act="del">Delete list</button>
+</div>
+
 <script>
   const STORAGE_KEY = 'checklist_data';
   const BRAND = '#F05726';
@@ -957,6 +1244,26 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.4.3', date: '2026-05-21', changes: [
+      'Completed tasks slide down into History',
+      'History is one list now — collapsible, no session groups',
+      'List edit + delete tucked into a ⋯ menu on each card',
+    ]},
+    { version: '1.4.2', date: '2026-05-21', changes: [
+      'Swipe a task right to complete it, left to delete it',
+      'Completing or deleting plays a colour flash + slide-off',
+    ]},
+    { version: '1.4.1', date: '2026-05-21', changes: [
+      'Cards slide aside as you drag — no more pop',
+      'Text can no longer be selected or highlighted by accident',
+    ]},
+    { version: '1.4.0', date: '2026-05-21', changes: [
+      'Press and hold a list card to drag it into a new order',
+      'Drag-reorder now works on phone, not just desktop',
+      '4 lists per row on a wide screen',
+      'Bolder, rounder edit and delete buttons',
+      'Fixed: a completed task could occasionally skip History',
+    ]},
     { version: '1.3.10', date: '2026-05-21', changes: [
       'History now shows only completed tasks',
     ]},
@@ -1020,7 +1327,7 @@
       name: name,
       color: color,
       todos: (todos || []).map(t => typeof t === 'string' ? { id: uid(), text: t } : t),
-      batches: [],
+      completed: [],
     };
   }
 
@@ -1041,24 +1348,17 @@
       st = { lists: [ newList('Checklist', BRAND, []) ] };
     }
 
-    // History only keeps completed tasks; drop any older add/delete entries
-    // and any batch left empty afterwards.
+    // Completed tasks live in one flat list; migrate any old session "batches".
     st.lists.forEach(l => {
       l.todos = l.todos || [];
-      l.batches = (l.batches || []).map(b => {
-        b.events = (b.events || []).filter(e => e.action === 'completed');
-        return b;
-      }).filter(b => b.events.length > 0);
-      if (Array.isArray(l.completed) && l.completed.length) {
-        const now = new Date().toISOString();
-        l.batches.push({
-          id: uid(),
-          name: 'Earlier',
-          startedAt: now,
-          events: l.completed.map(t => ({ action: 'completed', text: t.text, at: now })),
+      const done = Array.isArray(l.completed) ? l.completed.slice() : [];
+      (l.batches || []).forEach(b => {
+        (b.events || []).forEach(e => {
+          if (e.action === 'completed') done.push({ text: e.text, at: e.at });
         });
-      }
-      delete l.completed;
+      });
+      l.completed = done.map(c => ({ id: c.id || uid(), text: c.text, at: c.at || null }));
+      delete l.batches;
     });
     return st;
   }
@@ -1067,8 +1367,9 @@
   let activeListId = null;        // null = home view
   let editingListId = null;       // list being edited in the modal (null = creating)
   let pickedColor = COLORS[0].hex;
-  let sessionBatches = {};        // listId -> current batch id (this page session)
-  let openBatches = {};
+  let flashCompletedId = null;    // id of a freshly-completed task, to animate into History
+  let historyOpen = true;         // is the History section expanded
+  let cardMenuListId = null;      // list id the ⋯ menu is currently open for
   let dragId = null;
 
   function saveState() {
@@ -1078,10 +1379,9 @@
   function getList(id) { return state.lists.find(l => l.id === id); }
   function activeList() { return getList(activeListId); }
 
-  // "Done" = completed events still recorded in the list's history.
+  // "Done" = how many completed tasks the list has kept.
   function listDone(list) {
-    return list.batches.reduce((n, b) =>
-      n + b.events.filter(e => e.action === 'completed').length, 0);
+    return (list.completed || []).length;
   }
 
   function esc(s) {
@@ -1149,51 +1449,8 @@
     return 'linear-gradient(120deg, ' + colors.concat(colors[0]).join(', ') + ')';
   }
 
-  // --- History batches -----------------------------------------------------
-  function ensureBatch(list) {
-    if (sessionBatches[list.id]) return sessionBatches[list.id];
-    const now = new Date();
-    const batch = {
-      id: uid(),
-      name: now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }),
-      startedAt: now.toISOString(),
-      events: [],
-    };
-    list.batches.unshift(batch);
-    sessionBatches[list.id] = batch.id;
-    return batch.id;
-  }
-
-  function logEvent(action, text) {
-    const list = activeList();
-    if (!list) return;
-    const bId = ensureBatch(list);
-    const batch = list.batches.find(b => b.id === bId);
-    if (batch) {
-      batch.events.push({ action, text, at: new Date().toISOString() });
-      saveState();
-    }
-  }
-
-  // Close the active list's history session. Called whenever we leave a list.
-  // An empty session (visited, but nothing changed) is discarded entirely.
-  function endSession() {
-    if (!activeListId) return;
-    const list = getList(activeListId);
-    const bId = sessionBatches[activeListId];
-    if (list && bId) {
-      const b = list.batches.find(x => x.id === bId);
-      if (b && b.events.length === 0) {
-        list.batches = list.batches.filter(x => x.id !== bId);
-      }
-    }
-    delete sessionBatches[activeListId];
-    saveState();
-  }
-
   // --- Navigation ----------------------------------------------------------
   function goHome() {
-    endSession();
     activeListId = null;
     document.getElementById('listView').classList.remove('active');
     renderHome();
@@ -1202,10 +1459,7 @@
   function openList(id) {
     const list = getList(id);
     if (!list) return;
-    endSession();
     activeListId = id;
-    openBatches = {};
-    ensureBatch(list);
     themeList(list.color);
     renderList();
     const lv = document.getElementById('listView');
@@ -1219,6 +1473,8 @@
   }
 
   // --- Home view -----------------------------------------------------------
+  const MENU_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2.3"/><circle cx="12" cy="12" r="2.3"/><circle cx="19" cy="12" r="2.3"/></svg>`;
+
   function renderHome() {
     themeHome();
     const grid = document.getElementById('listGrid');
@@ -1236,37 +1492,40 @@
       const card = document.createElement('div');
       card.className = 'list-card';
       card.setAttribute('data-list-id', list.id);
-      card.draggable = true;
-      card.addEventListener('click', () => openList(list.id));
-      card.addEventListener('dragstart', e => onListDragStart(e, list.id));
-      card.addEventListener('dragend', onListDragEnd);
-      card.addEventListener('dragover', e => onListDragOver(e, list.id));
-      card.addEventListener('drop', e => onListDrop(e, list.id));
       card.innerHTML = `
-        ${complete ? `<div class="list-card-badge" title="All done!"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6 5,9 10,3"/></svg></div>` : ''}
-        <div class="list-card-stripe" style="background:${list.color}"></div>
-        <div class="list-card-body">
-          <div class="list-card-head">
-            <span class="list-card-name">${esc(list.name)}</span>
-            <div class="list-card-actions">
-              <button class="batch-action-btn" data-act="edit" title="Edit list">✎</button>
-              <button class="batch-action-btn delete-batch" data-act="del" title="Delete list">×</button>
+        <div class="card-inner">
+          <div class="list-card-stripe" style="background:${list.color}"></div>
+          <div class="list-card-body">
+            <div class="list-card-head">
+              <span class="list-card-name">${esc(list.name)}</span>
+              <div class="list-card-actions">
+                <button class="card-icon-btn" data-act="menu" title="List options" aria-label="List options">${MENU_ICON}</button>
+              </div>
             </div>
-          </div>
-          <div class="list-card-counts">${open} open${done ? ' · ' + done + ' done' : ''}</div>
-          <div class="list-card-progress">
-            <div class="list-card-progress-fill" style="width:${pct}%;background:${list.color}"></div>
+            <div class="list-card-counts">${open} open${done ? ' · ' + done + ' done' : ''}</div>
+            <div class="list-card-progress">
+              <div class="list-card-progress-fill" style="width:${pct}%;background:${list.color}"></div>
+            </div>
           </div>
         </div>`;
 
-      card.querySelector('[data-act="edit"]').addEventListener('click', e => {
+      card.querySelector('[data-act="menu"]').addEventListener('click', e => {
         e.stopPropagation();
-        openListModal(list.id);
+        openCardMenu(list.id, e.currentTarget);
       });
-      card.querySelector('[data-act="del"]').addEventListener('click', e => {
-        e.stopPropagation();
-        deleteList(list.id);
+
+      // Tap opens the list; press-and-hold starts a drag-reorder.
+      card.addEventListener('touchstart', e => {
+        if (e.touches.length !== 1 || e.target.closest('.card-icon-btn')) return;
+        lastHomeTouch = Date.now();
+        homePressStart(list.id, card, e.touches[0].clientX, e.touches[0].clientY);
+      }, { passive: true });
+      card.addEventListener('mousedown', e => {
+        if (e.button !== 0 || e.target.closest('.card-icon-btn')) return;
+        if (Date.now() - lastHomeTouch < 800) return;
+        homePressStart(list.id, card, e.clientX, e.clientY);
       });
+
       grid.appendChild(card);
     });
 
@@ -1277,44 +1536,147 @@
     grid.appendChild(add);
   }
 
-  // Drag-reorder list cards
-  let listDragId = null;
+  // --- Home cards: tap to open, press-and-hold to drag-reorder -------------
+  const HOLD_MS = 250;     // hold this long before a drag begins
+  const HOLD_SLOP = 10;    // a move bigger than this cancels the hold (it was a scroll)
 
-  function onListDragStart(e, id) {
-    listDragId = id;
-    e.dataTransfer.effectAllowed = 'move';
+  let lastHomeTouch = 0;   // guards against mouse events synthesised after a touch
+  let homeHold = null;     // pending press: { id, card, x, y, rect, timer }
+  let homeDrag = null;     // active drag:   { id, source, clone, grabX, grabY, targetId }
+
+  function homePressStart(id, card, x, y) {
+    cancelHomeHold();
+    if (homeDrag) return;
+    homeHold = {
+      id, card, x, y,
+      rect: card.getBoundingClientRect(),
+      timer: setTimeout(beginHomeDrag, HOLD_MS),
+    };
+    card.classList.add('pressing');
+    document.addEventListener('touchmove', homeMove, { passive: false });
+    document.addEventListener('touchend', homeUp);
+    document.addEventListener('touchcancel', homeUp);
+    document.addEventListener('mousemove', homeMove);
+    document.addEventListener('mouseup', homeUp);
+  }
+
+  function detachHomeListeners() {
+    document.removeEventListener('touchmove', homeMove, { passive: false });
+    document.removeEventListener('touchend', homeUp);
+    document.removeEventListener('touchcancel', homeUp);
+    document.removeEventListener('mousemove', homeMove);
+    document.removeEventListener('mouseup', homeUp);
+  }
+
+  function cancelHomeHold() {
+    if (!homeHold) return;
+    clearTimeout(homeHold.timer);
+    homeHold.card.classList.remove('pressing');
+    homeHold = null;
+    if (!homeDrag) detachHomeListeners();
+  }
+
+  function beginHomeDrag() {
+    if (!homeHold) return;
+    const { id, card, x, y, rect } = homeHold;
+    homeHold = null;
+    const clone = card.cloneNode(true);
+    clone.classList.remove('pressing');
+    clone.classList.add('lifted');
+    clone.style.width = rect.width + 'px';
+    clone.style.height = rect.height + 'px';
+    clone.style.left = '0';
+    clone.style.top = '0';
+    document.body.appendChild(clone);
+    card.classList.remove('pressing');
+    card.classList.add('dragging');
+    document.getElementById('listGrid').classList.add('reordering');
+    homeDrag = { id, source: card, clone, grabX: x - rect.left, grabY: y - rect.top,
+                 lastOver: null, cooldownUntil: 0 };
+    moveHomeDrag(x, y);
+  }
+
+  // Re-lay-out the grid with a FLIP animation so the cards visibly slide.
+  function flipMove(moveFn) {
+    const grid = document.getElementById('listGrid');
+    const cards = [...grid.querySelectorAll('.list-card')];
+    const first = cards.map(c => c.getBoundingClientRect());
+    moveFn();
+    cards.forEach((c, i) => {
+      const l = c.getBoundingClientRect();
+      const dx = first[i].left - l.left, dy = first[i].top - l.top;
+      c.style.transition = 'none';
+      c.style.transform = (dx || dy) ? 'translate(' + dx + 'px,' + dy + 'px)' : '';
+    });
     requestAnimationFrame(() => {
-      const el = document.querySelector(`.list-card[data-list-id="${id}"]`);
-      if (el) el.classList.add('dragging');
+      cards.forEach(c => {
+        c.style.transition = 'transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)';
+        c.style.transform = '';
+      });
     });
   }
 
-  function onListDragEnd() {
-    document.querySelectorAll('.list-card').forEach(el => el.classList.remove('dragging', 'drag-over'));
-    listDragId = null;
+  function moveHomeDrag(x, y) {
+    if (!homeDrag) return;
+    homeDrag.clone.style.transform =
+      'translate(' + (x - homeDrag.grabX) + 'px,' + (y - homeDrag.grabY) + 'px) scale(1.05)';
+    if (Date.now() < homeDrag.cooldownUntil) return;
+    const under = document.elementFromPoint(x, y);
+    const overCard = under && under.closest('.list-card');
+    if (!overCard || overCard === homeDrag.source || overCard.classList.contains('lifted')) return;
+    if (overCard === homeDrag.lastOver) return;
+    homeDrag.lastOver = overCard;
+    homeDrag.cooldownUntil = Date.now() + 130;
+    flipMove(() => {
+      const grid = homeDrag.source.parentNode;
+      const cards = [...grid.querySelectorAll('.list-card')];
+      const srcIdx = cards.indexOf(homeDrag.source);
+      const tgtIdx = cards.indexOf(overCard);
+      if (srcIdx < tgtIdx) grid.insertBefore(homeDrag.source, overCard.nextSibling);
+      else grid.insertBefore(homeDrag.source, overCard);
+    });
   }
 
-  function onListDragOver(e, id) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    document.querySelectorAll('.list-card').forEach(el => el.classList.remove('drag-over'));
-    if (id !== listDragId) {
-      const el = document.querySelector(`.list-card[data-list-id="${id}"]`);
-      if (el) el.classList.add('drag-over');
+  function endHomeDrag(commit) {
+    if (!homeDrag) return;
+    const { clone } = homeDrag;
+    homeDrag = null;
+    detachHomeListeners();
+    clone.remove();
+    const grid = document.getElementById('listGrid');
+    grid.classList.remove('reordering');
+    if (commit !== false) {
+      const order = [...grid.querySelectorAll('.list-card')]
+        .map(c => Number(c.getAttribute('data-list-id')));
+      state.lists.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+      saveState();
+    }
+    renderHome();
+  }
+
+  function homeMove(e) {
+    const pt = e.touches ? e.touches[0] : e;
+    if (!pt) return;
+    if (homeDrag) {
+      if (e.cancelable) e.preventDefault();
+      moveHomeDrag(pt.clientX, pt.clientY);
+    } else if (homeHold) {
+      if (Math.abs(pt.clientX - homeHold.x) > HOLD_SLOP ||
+          Math.abs(pt.clientY - homeHold.y) > HOLD_SLOP) {
+        cancelHomeHold();
+      }
     }
   }
 
-  function onListDrop(e, targetId) {
-    e.preventDefault();
-    if (listDragId == null || listDragId === targetId) return;
-    const fromIdx = state.lists.findIndex(l => l.id === listDragId);
-    const toIdx = state.lists.findIndex(l => l.id === targetId);
-    if (fromIdx < 0 || toIdx < 0) return;
-    const [moved] = state.lists.splice(fromIdx, 1);
-    state.lists.splice(toIdx, 0, moved);
-    listDragId = null;
-    saveState();
-    renderHome();
+  function homeUp(e) {
+    const cancelled = e.type === 'touchcancel';
+    if (homeDrag) {
+      endHomeDrag(!cancelled);
+    } else if (homeHold) {
+      const id = homeHold.id;
+      cancelHomeHold();
+      if (!cancelled) openList(id);
+    }
   }
 
   function deleteList(id) {
@@ -1327,7 +1689,6 @@
       danger: true,
       onConfirm: () => {
         state.lists = state.lists.filter(l => l.id !== id);
-        delete sessionBatches[id];
         if (state.lists.length === 0) {
           state.lists.push(newList('Checklist', BRAND, []));
         }
@@ -1413,86 +1774,113 @@
     if (items.length) items[items.length - 1].classList.add('adding');
   }
 
+  // Slide a row off-screen, collapse its height, then run the data change.
+  function exitTask(id, dir) {
+    const el = document.querySelector(`.task-item[data-id="${id}"]`);
+    if (!el) return;
+    const face = el.querySelector('.task-face');
+    const bg = el.querySelector('.task-action-bg');
+    if (bg) bg.className = 'task-action-bg armed ' + (dir > 0 ? 'show-complete' : 'show-delete');
+    if (face) {
+      face.style.transition = 'transform 0.26s cubic-bezier(0.4,0,0.7,1), opacity 0.2s ease 0.06s';
+      face.style.transform = 'translateX(' + (dir > 0 ? '108%' : '-108%') + ')';
+      face.style.opacity = '0';
+    }
+    el.style.maxHeight = el.offsetHeight + 'px';
+    requestAnimationFrame(() => {
+      el.classList.add('exiting');
+      el.style.maxHeight = '0';
+    });
+  }
+
+  // A soft full-screen flash of colour.
+  function popColor(color) {
+    const f = document.createElement('div');
+    f.className = 'color-pop';
+    f.style.background = color;
+    document.body.appendChild(f);
+    setTimeout(() => f.remove(), 520);
+  }
+
+  // Clone a row and swirl it down toward the History section.
+  function swirlToHistory(el) {
+    const face = el.querySelector('.task-face');
+    if (!face) return;
+    const rect = face.getBoundingClientRect();
+    const clone = face.cloneNode(true);
+    clone.className = 'task-face swirl-clone';
+    clone.style.transition = '';
+    clone.style.transform = '';
+    clone.style.opacity = '';
+    clone.style.boxShadow = '';
+    clone.style.position = 'fixed';
+    clone.style.left = rect.left + 'px';
+    clone.style.top = rect.top + 'px';
+    clone.style.width = rect.width + 'px';
+    clone.style.height = rect.height + 'px';
+    document.body.appendChild(clone);
+    face.style.opacity = '0';
+    el.style.maxHeight = el.offsetHeight + 'px';
+    el.style.overflow = 'hidden';
+    requestAnimationFrame(() => {
+      el.classList.add('exiting');
+      el.style.maxHeight = '0';
+      requestAnimationFrame(() => clone.classList.add('go'));
+    });
+    setTimeout(() => clone.remove(), 520);
+  }
+
   function completeTask(id) {
-    const el = document.querySelector(`[data-id="${id}"]`);
-    if (el) el.classList.add('removing');
+    const el = document.querySelector(`.task-item[data-id="${id}"]`);
+    if (el) swirlToHistory(el);
+    popColor('#4caf68');
     setTimeout(() => {
       const list = activeList();
       if (!list) return;
       const idx = list.todos.findIndex(t => t.id === id);
       if (idx > -1) {
         const task = list.todos.splice(idx, 1)[0];
-        logEvent('completed', task.text);
+        const cid = uid();
+        if (!Array.isArray(list.completed)) list.completed = [];
+        list.completed.unshift({ id: cid, text: task.text, at: new Date().toISOString() });
+        flashCompletedId = cid;
+        historyOpen = true;
         saveState();
         render();
       }
-    }, 200);
+    }, 360);
   }
 
-  function restoreFromHistory(text, batchId, eventIdx) {
+  function restoreCompleted(cid) {
     const list = activeList();
     if (!list) return;
-    const b = list.batches.find(x => x.id === batchId);
-    if (b) {
-      b.events.splice(eventIdx, 1);
-      if (b.events.length === 0) list.batches = list.batches.filter(x => x.id !== batchId);
+    const idx = list.completed.findIndex(c => c.id === cid);
+    if (idx > -1) {
+      const c = list.completed.splice(idx, 1)[0];
+      list.todos.push({ id: uid(), text: c.text });
+      saveState();
+      render();
     }
-    if (!list.todos.some(t => t.text === text)) {
-      list.todos.push({ id: uid(), text });
-    }
+  }
+
+  function deleteCompleted(cid) {
+    const list = activeList();
+    if (!list) return;
+    list.completed = list.completed.filter(c => c.id !== cid);
     saveState();
     render();
   }
 
   function deleteTask(id) {
-    const list = activeList();
-    if (!list) return;
-    list.todos = list.todos.filter(t => t.id !== id);
-    saveState();
-    render();
-  }
-
-  function toggleBatch(batchId) {
-    openBatches[batchId] = !openBatches[batchId];
-    render();
-  }
-
-  function deleteBatch(batchId, e) {
-    e.stopPropagation();
-    const list = activeList();
-    if (!list) return;
-    list.batches = list.batches.filter(b => b.id !== batchId);
-    saveState();
-    render();
-  }
-
-  function renameBatch(batchId, e) {
-    e.stopPropagation();
-    const list = activeList();
-    if (!list) return;
-    const nameEl = document.querySelector(`[data-batch-name="${batchId}"]`);
-    const current = list.batches.find(b => b.id === batchId);
-    if (!nameEl || !current) return;
-
-    const inp = document.createElement('input');
-    inp.className = 'batch-name-input';
-    inp.value = current.name;
-    nameEl.replaceWith(inp);
-    inp.focus();
-    inp.select();
-
-    function commit() {
-      const val = inp.value.trim();
-      if (val) current.name = val;
+    exitTask(id, -1);
+    popColor('#c0392b');
+    setTimeout(() => {
+      const list = activeList();
+      if (!list) return;
+      list.todos = list.todos.filter(t => t.id !== id);
       saveState();
       render();
-    }
-
-    inp.addEventListener('blur', commit);
-    inp.addEventListener('keydown', ev => {
-      if (ev.key === 'Enter') { ev.preventDefault(); inp.blur(); }
-      if (ev.key === 'Escape') { inp.blur(); }
-    });
+    }, 300);
   }
 
   function clearAllHistory() {
@@ -1500,17 +1888,35 @@
     if (!list) return;
     showConfirm({
       title: 'Clear history',
-      message: 'Clear all history for this list? This cannot be undone.',
+      message: 'Clear every completed task for this list? This cannot be undone.',
       confirmText: 'Clear history',
       danger: true,
       onConfirm: () => {
-        list.batches = [];
-        delete sessionBatches[list.id];
-        ensureBatch(list);
+        list.completed = [];
         saveState();
         render();
       },
     });
+  }
+
+  function toggleHistory() {
+    historyOpen = !historyOpen;
+    render();
+  }
+
+  // --- List card ⋯ menu ----------------------------------------------------
+  function openCardMenu(listId, btn) {
+    cardMenuListId = listId;
+    const menu = document.getElementById('cardMenu');
+    const r = btn.getBoundingClientRect();
+    menu.style.top = (r.bottom + 6) + 'px';
+    menu.style.right = (window.innerWidth - r.right) + 'px';
+    menu.classList.add('open');
+  }
+
+  function closeCardMenu() {
+    document.getElementById('cardMenu').classList.remove('open');
+    cardMenuListId = null;
   }
 
   // Drag reorder
@@ -1564,74 +1970,103 @@
     div.addEventListener('drop', e => onDrop(e, task.id));
 
     div.innerHTML = `
-      <div class="drag-handle" title="Drag to reorder">
-        <svg width="7" height="11" viewBox="0 0 7 11" fill="currentColor">
-          <rect x="1" y="0" width="1.5" height="1.5" rx="0.5"/>
-          <rect x="4.5" y="0" width="1.5" height="1.5" rx="0.5"/>
-          <rect x="1" y="4.5" width="1.5" height="1.5" rx="0.5"/>
-          <rect x="4.5" y="4.5" width="1.5" height="1.5" rx="0.5"/>
-          <rect x="1" y="9" width="1.5" height="1.5" rx="0.5"/>
-          <rect x="4.5" y="9" width="1.5" height="1.5" rx="0.5"/>
-        </svg>
+      <div class="task-action-bg">
+        <span class="ta-icon ta-complete"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="4,12.5 9.5,18 20,6.5"/></svg></span>
+        <span class="ta-icon ta-delete"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span>
       </div>
-      <div class="checkbox" onclick="completeTask(${task.id})">
-        <svg viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
-          <polyline points="2,6 5,9 10,3"/>
-        </svg>
+      <div class="task-face">
+        <div class="drag-handle" title="Drag to reorder">
+          <svg width="7" height="11" viewBox="0 0 7 11" fill="currentColor">
+            <rect x="1" y="0" width="1.5" height="1.5" rx="0.5"/>
+            <rect x="4.5" y="0" width="1.5" height="1.5" rx="0.5"/>
+            <rect x="1" y="4.5" width="1.5" height="1.5" rx="0.5"/>
+            <rect x="4.5" y="4.5" width="1.5" height="1.5" rx="0.5"/>
+            <rect x="1" y="9" width="1.5" height="1.5" rx="0.5"/>
+            <rect x="4.5" y="9" width="1.5" height="1.5" rx="0.5"/>
+          </svg>
+        </div>
+        <div class="checkbox" data-act="check">
+          <svg viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
+            <polyline points="2,6 5,9 10,3"/>
+          </svg>
+        </div>
+        <span class="task-text">${esc(task.text)}</span>
+        <button class="delete-btn" data-act="del" title="Delete">×</button>
       </div>
-      <span class="task-text" onclick="completeTask(${task.id})">${esc(task.text)}</span>
-      <button class="delete-btn" onclick="event.stopPropagation();deleteTask(${task.id})" title="Delete">×</button>
     `;
 
-    // Swipe the row to the left to tick it off.
-    (function () {
-      let x0 = 0, y0 = 0, d = 0, decided = false, horiz = false, track = false;
-      div.addEventListener('touchstart', e => {
-        if (e.touches.length !== 1) { track = false; return; }
-        x0 = e.touches[0].clientX;
-        y0 = e.touches[0].clientY;
-        d = 0; decided = false; horiz = false; track = true;
-      }, { passive: true });
-      div.addEventListener('touchmove', e => {
-        if (!track) return;
-        const mx = e.touches[0].clientX - x0;
-        const my = e.touches[0].clientY - y0;
-        if (!decided) {
-          if (Math.abs(mx) < 10 && Math.abs(my) < 10) return;
-          decided = true;
-          horiz = mx < 0 && Math.abs(mx) > Math.abs(my);
-          if (horiz) div.classList.add('swiping');
-        }
-        if (!horiz) return;
-        e.preventDefault();
-        d = Math.min(0, mx);
-        div.style.transform = 'translateX(' + d + 'px)';
-        div.classList.toggle('will-complete', -d > div.offsetWidth * 0.3);
-      }, { passive: false });
-      function endTaskSwipe() {
-        if (!track) return;
-        track = false;
-        if (!horiz) return;
-        div.classList.remove('swiping', 'will-complete');
-        if (-d > div.offsetWidth * 0.3) {
-          div.style.transform = 'translateX(-100%)';
-          completeTask(task.id);
-        } else {
-          div.style.transform = '';
-        }
-        d = 0;
-      }
-      div.addEventListener('touchend', endTaskSwipe);
-      div.addEventListener('touchcancel', endTaskSwipe);
-    })();
+    div.querySelector('[data-act="check"]').addEventListener('click', e => {
+      e.stopPropagation();
+      completeTask(task.id);
+    });
+    div.querySelector('[data-act="del"]').addEventListener('click', e => {
+      e.stopPropagation();
+      deleteTask(task.id);
+    });
 
+    attachTaskSwipe(div, task.id);
     return div;
+  }
+
+  // Active task: swipe right to complete, swipe left to delete.
+  function attachTaskSwipe(div, id) {
+    const face = div.querySelector('.task-face');
+    const bg = div.querySelector('.task-action-bg');
+    let x0 = 0, y0 = 0, d = 0, decided = false, horiz = false, track = false;
+    const armDist = () => Math.max(64, div.offsetWidth * 0.3);
+
+    div.addEventListener('touchstart', e => {
+      if (e.touches.length !== 1) { track = false; return; }
+      x0 = e.touches[0].clientX;
+      y0 = e.touches[0].clientY;
+      d = 0; decided = false; horiz = false; track = true;
+    }, { passive: true });
+
+    div.addEventListener('touchmove', e => {
+      if (!track) return;
+      const mx = e.touches[0].clientX - x0;
+      const my = e.touches[0].clientY - y0;
+      if (!decided) {
+        if (Math.abs(mx) < 9 && Math.abs(my) < 9) return;
+        decided = true;
+        horiz = Math.abs(mx) > Math.abs(my);
+        if (horiz) div.classList.add('swiping');
+        else { track = false; return; }
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      d = mx;
+      face.style.transform = 'translateX(' + d + 'px)';
+      const armed = Math.abs(d) > armDist();
+      bg.className = 'task-action-bg ' + (d > 0 ? 'show-complete' : 'show-delete') + (armed ? ' armed' : '');
+    }, { passive: false });
+
+    function endSwipe() {
+      if (!track) return;
+      track = false;
+      if (!horiz) return;
+      div.classList.remove('swiping');
+      const armed = Math.abs(d) > armDist();
+      if (armed && d > 0) {
+        completeTask(id);
+      } else if (armed && d < 0) {
+        deleteTask(id);
+      } else {
+        face.style.transition = 'transform 0.2s cubic-bezier(0.2,0.8,0.2,1)';
+        face.style.transform = '';
+        bg.className = 'task-action-bg';
+        setTimeout(() => { face.style.transition = ''; }, 220);
+      }
+      d = 0;
+    }
+    div.addEventListener('touchend', endSwipe);
+    div.addEventListener('touchcancel', endSwipe);
   }
 
   function renderList() {
     const list = activeList();
     if (!list) return;
-    const todos = list.todos, batches = list.batches;
+    const todos = list.todos;
 
     document.getElementById('listTitle').textContent = list.name;
 
@@ -1644,71 +2079,33 @@
     emptyState.style.display = todos.length ? 'none' : 'block';
     taskCount.textContent = todos.length + (todos.length === 1 ? ' task' : ' tasks');
 
-    // History — show every batch with events, including the live session.
-    const historyBatches = batches.filter(b => b.events.length > 0);
+    // History — a flat list of completed tasks, newest first.
+    const completed = list.completed || [];
     const historySection = document.getElementById('historySection');
-    const batchListEl = document.getElementById('batchList');
+    const listEl = document.getElementById('completedList');
 
-    historySection.style.display = historyBatches.length ? 'block' : 'none';
-    batchListEl.innerHTML = '';
+    historySection.style.display = completed.length ? 'block' : 'none';
+    listEl.innerHTML = '';
 
-    historyBatches.forEach(batch => {
-      const isOpen = openBatches[batch.id];
-      const card = document.createElement('div');
-      card.className = 'batch-card';
-
-      const itemsHtml = batch.events.map((ev, idx) => {
-        const svgIcons = {
-          added: `<svg width="10" height="10" viewBox="0 0 10 10" stroke="#fff" stroke-width="2" stroke-linecap="round"><line x1="5" y1="1" x2="5" y2="9"/><line x1="1" y1="5" x2="9" y2="5"/></svg>`,
-          completed: `<svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6 5,9 10,3"/></svg>`,
-          deleted: `<svg width="10" height="10" viewBox="0 0 10 10" stroke="#fff" stroke-width="2" stroke-linecap="round"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg>`,
-          restored: `<svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6 5,9 10,3"/></svg>`
-        };
-        const icon = svgIcons[ev.action] || svgIcons.added;
-        const dotClass = ev.action === 'added' ? 'added' : ev.action === 'completed' ? 'completed' : ev.action === 'deleted' ? 'deleted' : 'restored';
-        const restoreData = `data-restore-batch="${batch.id}" data-restore-idx="${idx}"`;
-        const iconEl = ev.action === 'completed'
-          ? `<span class="batch-task-icon ${dotClass} restore-icon" ${restoreData} title="Uncheck & restore">${icon}</span>`
-          : `<span class="batch-task-icon ${dotClass}">${icon}</span>`;
-        return `<div class="batch-task">
-          ${iconEl}
-          <span class="batch-task-text">${esc(ev.text)}</span>
-          <button class="restore-btn" ${restoreData}>Restore</button>
-        </div>`;
-      }).join('');
-
-      card.innerHTML = `
-        <div class="batch-header" onclick="toggleBatch(${batch.id})">
-          <span class="batch-chevron ${isOpen ? 'open' : ''}">▶</span>
-          <span class="batch-name" data-batch-name="${batch.id}">${esc(batch.name)}</span>
-          <span class="batch-meta">${batch.events.length}</span>
-          <div class="batch-actions">
-            <button class="batch-action-btn" onclick="renameBatch(${batch.id}, event)" title="Rename">✎</button>
-            <button class="batch-action-btn delete-batch" onclick="deleteBatch(${batch.id}, event)" title="Delete">×</button>
-          </div>
+    completed.forEach(c => {
+      const row = document.createElement('div');
+      row.className = 'done-item' + (c.id === flashCompletedId ? ' done-enter' : '');
+      row.innerHTML = `
+        <div class="done-check" data-act="restore" title="Restore to the list">
+          <svg viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6 5,9 10,3"/></svg>
         </div>
-        <div class="batch-items ${isOpen ? '' : 'collapsed'}">${itemsHtml}</div>
+        <span class="done-text">${esc(c.text)}</span>
+        <button class="done-del" data-act="del" title="Delete">×</button>
       `;
-
-      batchListEl.appendChild(card);
-
-      card.querySelectorAll('[data-restore-batch]').forEach(el => {
-        el.addEventListener('click', function(e) {
-          e.stopPropagation();
-          const bId = Number(el.dataset.restoreBatch);
-          const eIdx = Number(el.dataset.restoreIdx);
-          const b = list.batches.find(x => x.id === bId);
-          if (b && b.events[eIdx]) {
-            restoreFromHistory(b.events[eIdx].text, bId, eIdx);
-          }
-        });
-      });
-
-      if (isOpen) {
-        const itemsEl = card.querySelector('.batch-items');
-        itemsEl.style.maxHeight = itemsEl.scrollHeight + 'px';
-      }
+      row.querySelector('[data-act="restore"]').addEventListener('click', () => restoreCompleted(c.id));
+      row.querySelector('[data-act="del"]').addEventListener('click', () => deleteCompleted(c.id));
+      listEl.appendChild(row);
     });
+    flashCompletedId = null;
+
+    document.getElementById('historyCount').textContent = completed.length;
+    document.getElementById('historyChevron').classList.toggle('open', historyOpen);
+    listEl.style.maxHeight = historyOpen ? listEl.scrollHeight + 'px' : '0';
   }
 
   // --- Changelog -----------------------------------------------------------
@@ -1733,6 +2130,14 @@
 
   function closeChangelog() {
     document.getElementById('changelogOverlay').classList.remove('open');
+  }
+
+  function openSettings() {
+    document.getElementById('settingsOverlay').classList.add('open');
+  }
+
+  function closeSettings() {
+    document.getElementById('settingsOverlay').classList.remove('open');
   }
 
   // --- Branded confirm dialog ---------------------------------------------
@@ -1764,6 +2169,27 @@
     if (e.target.id === 'changelogOverlay') closeChangelog();
   });
 
+  document.getElementById('settingsOverlay').addEventListener('click', e => {
+    if (e.target.id === 'settingsOverlay') closeSettings();
+  });
+
+  document.querySelectorAll('#cardMenu .card-menu-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const act = btn.dataset.act, id = cardMenuListId;
+      closeCardMenu();
+      if (id == null) return;
+      if (act === 'edit') openListModal(id);
+      else if (act === 'del') deleteList(id);
+    });
+  });
+
+  document.addEventListener('click', e => {
+    const menu = document.getElementById('cardMenu');
+    if (menu.classList.contains('open') && !menu.contains(e.target) && !e.target.closest('[data-act="menu"]')) {
+      closeCardMenu();
+    }
+  });
+
   document.getElementById('listModalOverlay').addEventListener('click', e => {
     if (e.target.id === 'listModalOverlay') closeListModal();
   });
@@ -1777,7 +2203,7 @@
   });
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeChangelog(); closeListModal(); closeConfirm(); }
+    if (e.key === 'Escape') { closeChangelog(); closeSettings(); closeListModal(); closeConfirm(); closeCardMenu(); }
   });
 
   // Swipe a list to the right to slide back to all lists.
