@@ -78,7 +78,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    body, .list-card-badge, .card-inner { animation: none; }
+    body, .card-inner { animation: none; }
     #listView { transition: none; }
   }
 
@@ -342,36 +342,6 @@
     transition: width 0.3s ease;
   }
 
-  .list-card-badge {
-    position: absolute;
-    top: 9px;
-    right: 9px;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background: var(--green);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    transition: opacity 0.12s;
-    animation: badgePop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both,
-               badgePulse 2.6s ease-in-out 0.5s infinite;
-  }
-
-  .list-card:hover .list-card-badge { opacity: 0; }
-
-  @keyframes badgePop {
-    0% { transform: scale(0); }
-    70% { transform: scale(1.18); }
-    100% { transform: scale(1); }
-  }
-
-  @keyframes badgePulse {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-  }
-
   .new-list-card {
     background: color-mix(in srgb, var(--on-bg) 13%, transparent);
     border: 1.5px dashed color-mix(in srgb, var(--on-bg) 45%, transparent);
@@ -467,7 +437,32 @@
   .task-item:last-child { border-bottom: none; }
   .task-item.dragging { opacity: 0.2; }
   .task-item.drag-over { box-shadow: inset 0 2px 0 0 var(--accent); }
-  .task-item.exiting { transition: max-height 0.26s ease; }
+  .task-item.exiting,
+  .done-item.exiting { transition: max-height 0.26s ease; }
+
+  /* Pull-to-refresh indicator */
+  #pullIndicator {
+    position: fixed;
+    top: -52px;
+    left: 50%;
+    margin-left: -21px;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: var(--surface);
+    box-shadow: 0 5px 16px rgba(0,0,0,0.24);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+    z-index: 40;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  #pullIndicator.armed { color: var(--green); }
+  #pullIndicator.refreshing svg { animation: spin 0.6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
   .task-item.adding { animation: fadeUp 0.28s cubic-bezier(0.34, 1.35, 0.64, 1); }
 
@@ -609,14 +604,53 @@
   }
 
   .done-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 11px 16px;
+    position: relative;
+    overflow: hidden;
     border-bottom: 1px solid var(--border-subtle);
   }
 
   .done-item:last-child { border-bottom: none; }
+
+  .done-face {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 16px;
+    background: var(--surface);
+  }
+
+  .done-item.swiping .done-face {
+    transition: none;
+    box-shadow: 0 0 16px rgba(0,0,0,0.16);
+  }
+
+  /* Colour reveal behind a completed row while swiping */
+  .done-action-bg {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 22px;
+    background: var(--surface-alt);
+  }
+
+  .done-action-bg .ta-icon {
+    display: flex;
+    opacity: 0;
+    transition: opacity 0.12s, transform 0.12s;
+  }
+
+  .da-restore { color: var(--accent); }
+  .da-delete { color: var(--red); }
+  .done-action-bg.show-restore { background: var(--accent-soft); }
+  .done-action-bg.show-restore .da-restore { opacity: 1; }
+  .done-action-bg.show-delete { background: var(--red-soft); }
+  .done-action-bg.show-delete .da-delete { opacity: 1; }
+  .done-action-bg.armed.show-restore { background: var(--accent); }
+  .done-action-bg.armed.show-delete { background: var(--red); }
+  .done-action-bg.armed .ta-icon { color: #fff; transform: scale(1.3); }
 
   .done-check {
     width: 20px;
@@ -656,7 +690,7 @@
     transition: opacity 0.12s, color 0.12s;
   }
 
-  .done-item:hover .done-del { opacity: 1; }
+  .done-face:hover .done-del { opacity: 1; }
   .done-del:hover { color: var(--red); }
 
   .done-enter { animation: doneEnter 0.4s cubic-bezier(0.34, 1.3, 0.64, 1); }
@@ -745,160 +779,6 @@
   }
 
   .clear-all-btn:hover { background: color-mix(in srgb, var(--on-bg) 28%, transparent); }
-
-  .batch-card {
-    background: var(--surface);
-    border-radius: var(--radius);
-    margin-bottom: 8px;
-    overflow: hidden;
-  }
-
-  .batch-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 16px;
-    cursor: pointer;
-    user-select: none;
-    transition: background 0.1s;
-  }
-
-  .batch-header:hover { background: var(--surface-alt); }
-
-  .batch-chevron {
-    color: var(--text-dim);
-    font-size: 0.4rem;
-    transition: transform 0.2s;
-    flex-shrink: 0;
-  }
-
-  .batch-chevron.open { transform: rotate(90deg); }
-
-  .batch-name {
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: var(--text);
-    flex: 1;
-    cursor: pointer;
-  }
-
-  .batch-name-input {
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: var(--text);
-    background: var(--accent-soft);
-    border: 1.5px solid var(--accent);
-    border-radius: var(--radius-xs);
-    padding: 3px 8px;
-    font-family: inherit;
-    outline: none;
-    flex: 1;
-  }
-
-  .batch-meta {
-    font-size: 0.65rem;
-    color: var(--text-dim);
-    flex-shrink: 0;
-    font-variant-numeric: tabular-nums;
-    background: var(--accent-soft);
-    padding: 1px 7px;
-    border-radius: 20px;
-    font-weight: 600;
-    color: var(--accent);
-  }
-
-  .batch-actions {
-    display: flex;
-    gap: 2px;
-    opacity: 0;
-    transition: opacity 0.12s;
-  }
-
-  .batch-header:hover .batch-actions { opacity: 1; }
-
-  .batch-action-btn {
-    background: none;
-    border: none;
-    color: var(--text-secondary);
-    cursor: pointer;
-    padding: 2px 6px;
-    font-size: 0.72rem;
-    border-radius: var(--radius-xs);
-    transition: color 0.12s, background 0.12s;
-    font-family: inherit;
-  }
-
-  .batch-action-btn:hover { color: var(--accent); background: var(--accent-soft); }
-  .batch-action-btn.delete-batch:hover { color: var(--red); background: var(--red-soft); }
-
-  .batch-items {
-    overflow: hidden;
-    transition: max-height 0.3s ease;
-  }
-
-  .batch-items.collapsed { max-height: 0 !important; }
-
-  .batch-task {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 9px 16px 9px 34px;
-    border-top: 1px solid var(--border-subtle);
-    font-size: 0.78rem;
-    color: var(--text-secondary);
-  }
-
-  .batch-task-icon {
-    width: 18px;
-    height: 18px;
-    border-radius: 3px;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.7rem;
-    font-weight: 700;
-    color: #fff;
-  }
-
-  .batch-task-icon.added { background: var(--green); }
-  .batch-task-icon.completed { background: var(--accent); }
-  .batch-task-icon.deleted { background: var(--red); }
-  .batch-task-icon.restored { background: var(--pink); }
-
-  .batch-task-icon.restore-icon {
-    cursor: pointer;
-    transition: transform 0.1s;
-  }
-
-  .batch-task-icon.restore-icon:hover { transform: scale(1.18); }
-
-  .batch-task-text {
-    flex: 1;
-  }
-
-  .batch-task .restore-btn {
-    background: none;
-    border: 1px solid var(--border-light);
-    color: var(--accent);
-    font-family: inherit;
-    font-size: 0.62rem;
-    font-weight: 700;
-    cursor: pointer;
-    padding: 2px 8px;
-    border-radius: var(--radius-xs);
-    transition: all 0.12s;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    opacity: 0;
-    flex-shrink: 0;
-  }
-
-  .batch-task:hover .restore-btn { opacity: 1; }
-  .batch-task .restore-btn:hover {
-    background: var(--accent-soft);
-    border-color: var(--accent);
-  }
 
   /* Version + changelog */
   .version-footer {
@@ -1128,6 +1008,10 @@
 </head>
 <body>
 
+<div id="pullIndicator">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>
+</div>
+
 <!-- HOME VIEW -->
 <div class="view" id="homeView"><div class="view-inner">
   <div class="header">
@@ -1244,6 +1128,10 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.4.5', date: '2026-05-21', changes: [
+      'Swipe a completed task — right restores it, left deletes it',
+      'Pull down from the top to refresh',
+    ]},
     { version: '1.4.4', date: '2026-05-21', changes: [
       'New name — say hello to JotList',
     ]},
@@ -1351,7 +1239,10 @@
         todos: raw.todos || [], completed: raw.completed || [], batches: raw.batches || [],
       }] };
     } else {
-      st = { lists: [ newList('JotList', BRAND, DEFAULT_TODOS) ] };
+      st = { lists: [
+        newList('JotList 1', COLORS[0].hex, DEFAULT_TODOS),
+        newList('JotList 2', COLORS[1].hex, DEFAULT_TODOS),
+      ] };
     }
 
     // Completed tasks live in one flat list; migrate any old session "batches".
@@ -1493,7 +1384,6 @@
       const done = listDone(list);
       const total = open + done;
       const pct = total ? Math.round(done / total * 100) : 0;
-      const complete = open === 0 && done > 0;
 
       const card = document.createElement('div');
       card.className = 'list-card';
@@ -2069,6 +1959,80 @@
     div.addEventListener('touchcancel', endSwipe);
   }
 
+  // Completed task: swipe right to restore, swipe left to delete.
+  function exitDoneRow(el, dir) {
+    if (!el) return;
+    const face = el.querySelector('.done-face');
+    const bg = el.querySelector('.done-action-bg');
+    if (bg) bg.className = 'done-action-bg armed ' + (dir > 0 ? 'show-restore' : 'show-delete');
+    if (face) {
+      face.style.transition = 'transform 0.26s cubic-bezier(0.4,0,0.7,1), opacity 0.2s ease 0.06s';
+      face.style.transform = 'translateX(' + (dir > 0 ? '108%' : '-108%') + ')';
+      face.style.opacity = '0';
+    }
+    el.style.maxHeight = el.offsetHeight + 'px';
+    requestAnimationFrame(() => {
+      el.classList.add('exiting');
+      el.style.maxHeight = '0';
+    });
+  }
+
+  function attachDoneSwipe(div, cid) {
+    const face = div.querySelector('.done-face');
+    const bg = div.querySelector('.done-action-bg');
+    let x0 = 0, y0 = 0, d = 0, decided = false, horiz = false, track = false;
+    const armDist = () => Math.max(64, div.offsetWidth * 0.3);
+
+    div.addEventListener('touchstart', e => {
+      if (e.touches.length !== 1) { track = false; return; }
+      x0 = e.touches[0].clientX;
+      y0 = e.touches[0].clientY;
+      d = 0; decided = false; horiz = false; track = true;
+    }, { passive: true });
+
+    div.addEventListener('touchmove', e => {
+      if (!track) return;
+      const mx = e.touches[0].clientX - x0;
+      const my = e.touches[0].clientY - y0;
+      if (!decided) {
+        if (Math.abs(mx) < 9 && Math.abs(my) < 9) return;
+        decided = true;
+        horiz = Math.abs(mx) > Math.abs(my);
+        if (horiz) div.classList.add('swiping');
+        else { track = false; return; }
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      d = mx;
+      face.style.transform = 'translateX(' + d + 'px)';
+      const armed = Math.abs(d) > armDist();
+      bg.className = 'done-action-bg ' + (d > 0 ? 'show-restore' : 'show-delete') + (armed ? ' armed' : '');
+    }, { passive: false });
+
+    function endSwipe() {
+      if (!track) return;
+      track = false;
+      if (!horiz) return;
+      div.classList.remove('swiping');
+      const armed = Math.abs(d) > armDist();
+      if (armed && d > 0) {
+        exitDoneRow(div, 1);
+        setTimeout(() => restoreCompleted(cid), 280);
+      } else if (armed && d < 0) {
+        exitDoneRow(div, -1);
+        setTimeout(() => deleteCompleted(cid), 280);
+      } else {
+        face.style.transition = 'transform 0.2s cubic-bezier(0.2,0.8,0.2,1)';
+        face.style.transform = '';
+        bg.className = 'done-action-bg';
+        setTimeout(() => { face.style.transition = ''; }, 220);
+      }
+      d = 0;
+    }
+    div.addEventListener('touchend', endSwipe);
+    div.addEventListener('touchcancel', endSwipe);
+  }
+
   function renderList() {
     const list = activeList();
     if (!list) return;
@@ -2097,14 +2061,29 @@
       const row = document.createElement('div');
       row.className = 'done-item' + (c.id === flashCompletedId ? ' done-enter' : '');
       row.innerHTML = `
-        <div class="done-check" data-act="restore" title="Restore to the list">
-          <svg viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6 5,9 10,3"/></svg>
+        <div class="done-action-bg">
+          <span class="ta-icon da-restore"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 15 4 10 9 5"/><path d="M4 10h10a6 6 0 0 1 0 12h-3"/></svg></span>
+          <span class="ta-icon da-delete"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span>
         </div>
-        <span class="done-text">${esc(c.text)}</span>
-        <button class="done-del" data-act="del" title="Delete">×</button>
+        <div class="done-face">
+          <div class="done-check" data-act="restore" title="Restore to the list">
+            <svg viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6 5,9 10,3"/></svg>
+          </div>
+          <span class="done-text">${esc(c.text)}</span>
+          <button class="done-del" data-act="del" title="Delete">×</button>
+        </div>
       `;
-      row.querySelector('[data-act="restore"]').addEventListener('click', () => restoreCompleted(c.id));
-      row.querySelector('[data-act="del"]').addEventListener('click', () => deleteCompleted(c.id));
+      row.querySelector('[data-act="restore"]').addEventListener('click', e => {
+        e.stopPropagation();
+        exitDoneRow(row, 1);
+        setTimeout(() => restoreCompleted(c.id), 280);
+      });
+      row.querySelector('[data-act="del"]').addEventListener('click', e => {
+        e.stopPropagation();
+        exitDoneRow(row, -1);
+        setTimeout(() => deleteCompleted(c.id), 280);
+      });
+      attachDoneSwipe(row, c.id);
       listEl.appendChild(row);
     });
     flashCompletedId = null;
@@ -2270,6 +2249,62 @@
   setAppHeight();
   window.addEventListener('resize', setAppHeight);
   window.addEventListener('orientationchange', setAppHeight);
+
+  // Pull down from the top of a view to refresh (reload) the app.
+  (function () {
+    const ind = document.getElementById('pullIndicator');
+    const THRESH = 64;
+    let startX = 0, startY = 0, active = false, decided = false, dist = 0, armed = false;
+
+    function scroller() {
+      return document.getElementById(activeListId ? 'listView' : 'homeView');
+    }
+
+    document.addEventListener('touchstart', e => {
+      active = false;
+      if (e.touches.length !== 1 || ind.classList.contains('refreshing')) return;
+      if (scroller().scrollTop > 0) return;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      active = true; decided = false; dist = 0; armed = false;
+    }, { passive: true });
+
+    document.addEventListener('touchmove', e => {
+      if (!active) return;
+      const dx = e.touches[0].clientX - startX;
+      const dy = e.touches[0].clientY - startY;
+      if (!decided) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        decided = true;
+        if (dy < 8 || Math.abs(dx) > dy) { active = false; return; }
+      }
+      if (scroller().scrollTop > 0) { active = false; ind.style.opacity = '0'; return; }
+      e.preventDefault();
+      dist = Math.min(dy * 0.5, 100);
+      armed = dist > THRESH;
+      ind.style.transition = 'none';
+      ind.style.transform = 'translateY(' + (dist + 62) + 'px)';
+      ind.style.opacity = Math.min(dist / THRESH, 1);
+      ind.classList.toggle('armed', armed);
+    }, { passive: false });
+
+    function endPull() {
+      if (!active) return;
+      active = false;
+      if (armed) {
+        ind.classList.add('refreshing');
+        ind.style.transition = 'transform 0.2s';
+        ind.style.transform = 'translateY(118px)';
+        setTimeout(() => location.reload(), 420);
+      } else {
+        ind.style.transition = 'transform 0.25s, opacity 0.2s';
+        ind.style.transform = '';
+        ind.style.opacity = '0';
+      }
+    }
+    document.addEventListener('touchend', endPull);
+    document.addEventListener('touchcancel', endPull);
+  })();
 
   renderVersion();
   goHome();
