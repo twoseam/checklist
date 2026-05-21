@@ -1,0 +1,15 @@
+{
+  "name": "Checklist",
+  "short_name": "Checklist",
+  "description": "A simple multi-list checklist.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F05726",
+  "theme_color": "#F05726",
+  "icons": [
+    { "src": "icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "icon-512.png", "type": "image/png", "sizes": "512x512" },
+    { "src": "icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ]
+}
