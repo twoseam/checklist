@@ -52,7 +52,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    body { animation: none; }
+    body, .list-card-badge { animation: none; }
   }
 
   .container {
@@ -183,6 +183,36 @@
     height: 100%;
     border-radius: 3px;
     transition: width 0.3s ease;
+  }
+
+  .list-card-badge {
+    position: absolute;
+    top: 9px;
+    right: 9px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--green);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    transition: opacity 0.12s;
+    animation: badgePop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both,
+               badgePulse 2.6s ease-in-out 0.5s infinite;
+  }
+
+  .list-card:hover .list-card-badge { opacity: 0; }
+
+  @keyframes badgePop {
+    0% { transform: scale(0); }
+    70% { transform: scale(1.18); }
+    100% { transform: scale(1); }
+  }
+
+  @keyframes badgePulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
   }
 
   .new-list-card {
@@ -754,6 +784,16 @@
 
   .modal-btn-secondary { background: var(--border-subtle); color: var(--text-secondary); }
   .modal-btn-secondary:hover { background: #e8ddd3; }
+
+  .modal-btn-danger { background: var(--red); }
+  .modal-btn-danger:hover { filter: brightness(0.92); }
+
+  .confirm-message {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 20px;
+  }
 </style>
 </head>
 <body>
@@ -822,6 +862,21 @@
   </div>
 </div>
 
+<!-- CONFIRM DIALOG -->
+<div class="overlay" id="confirmOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="confirmTitle">Are you sure?</span>
+      <button class="modal-close" onclick="closeConfirm()" title="Close">×</button>
+    </div>
+    <p class="confirm-message" id="confirmMessage"></p>
+    <div class="modal-actions">
+      <button class="modal-btn-secondary" onclick="closeConfirm()">Cancel</button>
+      <button class="modal-btn-primary" id="confirmOk" onclick="runConfirm()">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <script>
   const STORAGE_KEY = 'checklist_data';
   const BRAND = '#F05726';
@@ -842,6 +897,8 @@
       'Drag to reorder list cards',
       'History session ends when you leave a list',
       'Checked tasks go straight to history',
+      'Animated badge when a list is fully done',
+      'Branded confirm dialogs (no system popups)',
     ]},
     { version: '1.2.0', date: '2026-05-21', changes: [
       'Multiple named lists',
@@ -1087,6 +1144,7 @@
       const done = listDone(list);
       const total = open + done;
       const pct = total ? Math.round(done / total * 100) : 0;
+      const complete = open === 0 && done > 0;
 
       const card = document.createElement('div');
       card.className = 'list-card';
@@ -1098,6 +1156,7 @@
       card.addEventListener('dragover', e => onListDragOver(e, list.id));
       card.addEventListener('drop', e => onListDrop(e, list.id));
       card.innerHTML = `
+        ${complete ? `<div class="list-card-badge" title="All done!"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6 5,9 10,3"/></svg></div>` : ''}
         <div class="list-card-stripe" style="background:${list.color}"></div>
         <div class="list-card-body">
           <div class="list-card-head">
@@ -1174,14 +1233,21 @@
   function deleteList(id) {
     const list = getList(id);
     if (!list) return;
-    if (!confirm(`Delete "${list.name}"? This removes all its tasks and history.`)) return;
-    state.lists = state.lists.filter(l => l.id !== id);
-    delete sessionBatches[id];
-    if (state.lists.length === 0) {
-      state.lists.push(newList('Checklist', BRAND, []));
-    }
-    saveState();
-    renderHome();
+    showConfirm({
+      title: 'Delete list',
+      message: `Delete "${list.name}"? This removes all of its tasks and history.`,
+      confirmText: 'Delete list',
+      danger: true,
+      onConfirm: () => {
+        state.lists = state.lists.filter(l => l.id !== id);
+        delete sessionBatches[id];
+        if (state.lists.length === 0) {
+          state.lists.push(newList('Checklist', BRAND, []));
+        }
+        saveState();
+        renderHome();
+      },
+    });
   }
 
   // --- List create/edit modal ---------------------------------------------
@@ -1346,14 +1412,21 @@
   }
 
   function clearAllHistory() {
-    if (!confirm('Clear all history for this list? This cannot be undone.')) return;
     const list = activeList();
     if (!list) return;
-    list.batches = [];
-    delete sessionBatches[list.id];
-    ensureBatch(list);
-    saveState();
-    render();
+    showConfirm({
+      title: 'Clear history',
+      message: 'Clear all history for this list? This cannot be undone.',
+      confirmText: 'Clear history',
+      danger: true,
+      onConfirm: () => {
+        list.batches = [];
+        delete sessionBatches[list.id];
+        ensureBatch(list);
+        saveState();
+        render();
+      },
+    });
   }
 
   // Drag reorder
@@ -1533,6 +1606,30 @@
     document.getElementById('changelogOverlay').classList.remove('open');
   }
 
+  // --- Branded confirm dialog ---------------------------------------------
+  let confirmAction = null;
+
+  function showConfirm(opts) {
+    document.getElementById('confirmTitle').textContent = opts.title || 'Are you sure?';
+    document.getElementById('confirmMessage').textContent = opts.message || '';
+    const ok = document.getElementById('confirmOk');
+    ok.textContent = opts.confirmText || 'Confirm';
+    ok.classList.toggle('modal-btn-danger', !!opts.danger);
+    confirmAction = opts.onConfirm || null;
+    document.getElementById('confirmOverlay').classList.add('open');
+  }
+
+  function closeConfirm() {
+    document.getElementById('confirmOverlay').classList.remove('open');
+    confirmAction = null;
+  }
+
+  function runConfirm() {
+    const fn = confirmAction;
+    closeConfirm();
+    if (fn) fn();
+  }
+
   // --- Wiring --------------------------------------------------------------
   document.getElementById('changelogOverlay').addEventListener('click', e => {
     if (e.target.id === 'changelogOverlay') closeChangelog();
@@ -1542,12 +1639,16 @@
     if (e.target.id === 'listModalOverlay') closeListModal();
   });
 
+  document.getElementById('confirmOverlay').addEventListener('click', e => {
+    if (e.target.id === 'confirmOverlay') closeConfirm();
+  });
+
   document.getElementById('listNameField').addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); saveListModal(); }
   });
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeChangelog(); closeListModal(); }
+    if (e.key === 'Escape') { closeChangelog(); closeListModal(); closeConfirm(); }
   });
 
   applyTheme(BRAND);
