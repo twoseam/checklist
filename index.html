@@ -41,16 +41,9 @@
     --radius-xs: 3px;
   }
 
-  html {
-    background: var(--app-bg, #F05726);
-    background-size: 300% 300%;
-    animation: bgDrift 22s ease-in-out infinite;
-    height: 100%;
-  }
-
-  body {
+  html, body {
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
-    background: transparent;
+    background: #F05726;
     color: var(--text);
     -webkit-font-smoothing: antialiased;
     overflow: hidden;
@@ -63,20 +56,25 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    html, .list-card-badge { animation: none; }
+    #homeView, .list-card-badge { animation: none; }
     #listView { transition: none; }
   }
 
   .view {
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--app-h, 100%);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
   }
 
   #homeView {
-    background: transparent;
+    background: var(--home-bg, #F05726);
+    background-size: 300% 300%;
+    animation: bgDrift 22s ease-in-out infinite;
   }
 
   #listView {
@@ -947,7 +945,7 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
-    { version: '1.3.2', date: '2026-05-21', changes: [
+    { version: '1.3.3', date: '2026-05-21', changes: [
       'Background fills the entire screen',
       'Bigger edit/delete buttons on cards',
     ]},
@@ -1103,7 +1101,6 @@
     const lv = document.getElementById('listView');
     const light = isLight(color);
     const ink = light ? shade(color, -0.5) : color;
-    document.documentElement.style.setProperty('--app-bg', color);
     lv.style.setProperty('--list-bg', color);
     lv.style.setProperty('--accent', ink);
     lv.style.setProperty('--accent-hover', shade(ink, -0.15));
@@ -1115,10 +1112,10 @@
 
   // Theme the home view to the blend of all list colors.
   function themeHome() {
+    const hv = document.getElementById('homeView');
     const first = state.lists[0];
-    document.documentElement.style.setProperty('--app-bg', homeGradient());
-    document.getElementById('homeView').style.setProperty('--on-bg',
-      first && isLight(first.color) ? '#2a2118' : '#fff');
+    hv.style.setProperty('--home-bg', homeGradient());
+    hv.style.setProperty('--on-bg', first && isLight(first.color) ? '#2a2118' : '#fff');
   }
 
   // Home backdrop: a soft gradient of the lists' own colors. The body slowly
@@ -1774,6 +1771,14 @@
     lv.addEventListener('touchend', endSwipe);
     lv.addEventListener('touchcancel', endSwipe);
   })();
+
+  // Pin views to the real screen height (iOS standalone miscomputes 100%).
+  function setAppHeight() {
+    document.documentElement.style.setProperty('--app-h', (window.innerHeight + 60) + 'px');
+  }
+  setAppHeight();
+  window.addEventListener('resize', setAppHeight);
+  window.addEventListener('orientationchange', setAppHeight);
 
   renderVersion();
   goHome();
