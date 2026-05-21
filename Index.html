@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Checklist</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #f15826;
+    --surface: #fff;
+    --surface-alt: #fdf8f6;
+    --border: #f15826;
+    --border-light: #f1582630;
+    --border-subtle: #f0e8e2;
+    --text: #2a2118;
+    --text-secondary: #9a8a7a;
+    --text-dim: #c8bdb2;
+    --accent: #f15826;
+    --accent-hover: #d94d20;
+    --accent-soft: #fce8e0;
+    --pink: #e8a0bf;
+    --pink-soft: #f5dce8;
+    --green: #4caf68;
+    --green-soft: #e4f5e9;
+    --red: #c0392b;
+    --red-soft: #fce4e3;
+    --blue-soft: #e0edf8;
+    --radius: 6px;
+    --radius-sm: 4px;
+    --radius-xs: 3px;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 48px 20px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .container {
+    max-width: 520px;
+    margin: 0 auto;
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 24px;
+  }
+
+  .header h1 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: #fff;
+  }
+
+  .header .count {
+    font-size: 0.75rem;
+    color: rgba(255,255,255,0.6);
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+  }
+
+  /* Input */
+  .input-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-bottom: 12px;
+    background: var(--surface);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .input-row input {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.88rem;
+    padding: 14px 16px;
+    outline: none;
+  }
+
+  .input-row input::placeholder { color: var(--text-dim); }
+
+  .input-row .add-btn {
+    background: var(--accent);
+    border: none;
+    border-radius: var(--radius-sm);
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 9px 16px;
+    margin-right: 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+    flex-shrink: 0;
+    opacity: 0;
+    pointer-events: none;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .input-row input:not(:placeholder-shown) ~ .add-btn {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  .add-btn:hover { background: var(--accent-hover); }
+
+  /* Section labels */
+  .section-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: rgba(255,255,255,0.7);
+    margin-bottom: 8px;
+  }
+
+  /* Task list */
+  .task-list {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .task-list:empty { display: none; }
+
+  .task-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    cursor: default;
+    user-select: none;
+    transition: opacity 0.2s, transform 0.2s, background 0.1s;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .task-item:last-child { border-bottom: none; }
+  .task-item:hover { background: var(--surface-alt); }
+  .task-item.dragging { opacity: 0.2; }
+  .task-item.drag-over { box-shadow: inset 0 2px 0 0 var(--accent); }
+
+  .task-item.removing {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+
+  .task-item.adding {
+    animation: fadeUp 0.2s ease-out;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Drag handle */
+  .drag-handle {
+    cursor: grab;
+    color: var(--text-dim);
+    opacity: 0;
+    transition: opacity 0.12s;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+  }
+
+  .drag-handle:active { cursor: grabbing; }
+  .task-item:hover .drag-handle { opacity: 1; }
+
+  /* Checkbox */
+  .checkbox {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--accent);
+    border-radius: 3px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .task-item:hover .checkbox { border-color: var(--accent-hover); }
+
+  .checkbox svg {
+    width: 10px;
+    height: 10px;
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+
+  .task-item.done .checkbox {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .task-item.done .checkbox svg {
+    opacity: 1;
+    stroke: #fff;
+  }
+
+  /* Task text */
+  .task-text {
+    font-size: 0.88rem;
+    flex: 1;
+    cursor: pointer;
+    color: var(--text);
+    font-weight: 400;
+  }
+
+  .task-item.done .task-text {
+    text-decoration: line-through;
+    color: var(--text-dim);
+  }
+
+  /* Delete */
+  .delete-btn {
+    opacity: 0;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 2px 5px;
+    font-size: 0.85rem;
+    line-height: 1;
+    transition: opacity 0.12s, color 0.12s;
+  }
+
+  .task-item:hover .delete-btn { opacity: 1; }
+  .delete-btn:hover { color: var(--red); }
+
+  /* Empty state */
+  .empty-state {
+    color: rgba(255,255,255,0.4);
+    font-size: 0.85rem;
+    text-align: center;
+    padding: 40px 0;
+  }
+
+  /* Completed section */
+  .completed-section { margin-top: 20px; }
+
+  .completed-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+    padding: 8px 0;
+  }
+
+  .completed-header:hover .section-label { color: #fff; }
+
+  .chevron {
+    color: rgba(255,255,255,0.5);
+    font-size: 0.45rem;
+    transition: transform 0.2s;
+  }
+
+  .chevron.open { transform: rotate(90deg); }
+
+  .completed-count {
+    font-size: 0.65rem;
+    color: var(--accent);
+    font-weight: 700;
+    background: rgba(255,255,255,0.9);
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .completed-list {
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    background: var(--surface);
+    border-radius: var(--radius);
+  }
+
+  .completed-list:empty { display: none; }
+  .completed-list.collapsed { max-height: 0 !important; border: none; }
+
+  /* History */
+  .history-section {
+    margin-top: 40px;
+    padding-top: 24px;
+    border-top: 1px solid rgba(255,255,255,0.15);
+  }
+
+  .history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+
+  .history-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #fff;
+  }
+
+  .clear-all-btn {
+    background: rgba(255,255,255,0.15);
+    border: none;
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.7rem;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 5px 12px;
+    border-radius: var(--radius-xs);
+    transition: background 0.15s;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .clear-all-btn:hover { background: rgba(255,255,255,0.25); }
+
+  .batch-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+    overflow: hidden;
+  }
+
+  .batch-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.1s;
+  }
+
+  .batch-header:hover { background: var(--surface-alt); }
+
+  .batch-chevron {
+    color: var(--text-dim);
+    font-size: 0.4rem;
+    transition: transform 0.2s;
+    flex-shrink: 0;
+  }
+
+  .batch-chevron.open { transform: rotate(90deg); }
+
+  .batch-name {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text);
+    flex: 1;
+    cursor: pointer;
+  }
+
+  .batch-name-input {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text);
+    background: var(--accent-soft);
+    border: 1.5px solid var(--accent);
+    border-radius: var(--radius-xs);
+    padding: 3px 8px;
+    font-family: inherit;
+    outline: none;
+    flex: 1;
+  }
+
+  .batch-meta {
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+    background: var(--accent-soft);
+    padding: 1px 7px;
+    border-radius: 20px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  .batch-actions {
+    display: flex;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+
+  .batch-header:hover .batch-actions { opacity: 1; }
+
+  .batch-action-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 2px 6px;
+    font-size: 0.72rem;
+    border-radius: var(--radius-xs);
+    transition: color 0.12s, background 0.12s;
+    font-family: inherit;
+  }
+
+  .batch-action-btn:hover { color: var(--accent); background: var(--accent-soft); }
+  .batch-action-btn.delete-batch:hover { color: var(--red); background: var(--red-soft); }
+
+  .batch-items {
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+  }
+
+  .batch-items.collapsed { max-height: 0 !important; }
+
+  .batch-task {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 9px 16px 9px 34px;
+    border-top: 1px solid var(--border-subtle);
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+  }
+
+  .batch-task-icon {
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #fff;
+  }
+
+  .batch-task-icon.added { background: var(--green); }
+  .batch-task-icon.completed { background: var(--accent); }
+  .batch-task-icon.deleted { background: var(--red); }
+  .batch-task-icon.restored { background: var(--pink); }
+
+  .batch-task-text {
+    flex: 1;
+  }
+
+  .batch-task .restore-btn {
+    background: none;
+    border: 1px solid var(--border-light);
+    color: var(--accent);
+    font-family: inherit;
+    font-size: 0.62rem;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: var(--radius-xs);
+    transition: all 0.12s;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    opacity: 0;
+    flex-shrink: 0;
+  }
+
+  .batch-task:hover .restore-btn { opacity: 1; }
+  .batch-task .restore-btn:hover {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>Checklist</h1>
+    <div class="count" id="taskCount"></div>
+  </div>
+
+  <div class="input-row">
+    <input type="text" id="newTask" placeholder="Add a task..." autofocus>
+    <button class="add-btn" onclick="addTask()">Add</button>
+  </div>
+
+  <div class="task-list" id="todoList"></div>
+  <div class="empty-state" id="emptyState">No tasks yet</div>
+
+  <div class="completed-section" id="completedSection" style="display:none;">
+    <div class="completed-header" onclick="toggleCompleted()">
+      <span class="chevron" id="chevron">▶</span>
+      <span class="section-label" style="margin-bottom:0">Completed</span>
+      <span class="completed-count" id="completedCount">0</span>
+    </div>
+    <div class="completed-list collapsed" id="completedList"></div>
+  </div>
+
+  <div class="history-section" id="historySection" style="display:none;">
+    <div class="history-header">
+      <span class="history-title">History</span>
+      <button class="clear-all-btn" onclick="clearAllHistory()">Clear All</button>
+    </div>
+    <div id="batchList"></div>
+  </div>
+</div>
+
+<script>
+  const STORAGE_KEY = 'checklist_data';
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch(e) {}
+    return null;
+  }
+
+  function saveState() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ todos, completed, batches, currentBatchId }));
+  }
+
+  const defaultTodos = [
+    { id: 1, text: 'Search Bars for both' },
+    { id: 2, text: 'Spacing after title' },
+    { id: 3, text: 'What is the little pop up' },
+    { id: 4, text: 'Moble popup for papercuts' },
+    { id: 5, text: 'Persistent password for editing videos' },
+    { id: 6, text: 'Tutorial popups for first timers' },
+    { id: 7, text: 'MOve buttons above videos' },
+  ];
+
+  const saved = loadState();
+  let todos = saved ? saved.todos : [...defaultTodos];
+  let completed = saved ? saved.completed : [];
+  let batches = saved ? saved.batches : [];
+  let currentBatchId = null;
+
+  function startBatch() {
+    const now = new Date();
+    const batch = {
+      id: Date.now(),
+      name: now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }),
+      startedAt: now.toISOString(),
+      events: []
+    };
+    batches.unshift(batch);
+    currentBatchId = batch.id;
+    saveState();
+  }
+
+  function logEvent(action, text) {
+    if (!currentBatchId) return;
+    const batch = batches.find(b => b.id === currentBatchId);
+    if (batch) {
+      batch.events.push({ action, text, at: new Date().toISOString() });
+      saveState();
+    }
+  }
+
+  startBatch();
+
+  let completedOpen = false;
+  let openBatches = {};
+
+  const input = document.getElementById('newTask');
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
+
+  function addTask() {
+    const text = input.value.trim();
+    if (!text) return;
+    todos.push({ id: Date.now(), text });
+    logEvent('added', text);
+    input.value = '';
+    input.focus();
+    saveState();
+    render();
+    const items = document.getElementById('todoList').children;
+    if (items.length) items[items.length - 1].classList.add('adding');
+  }
+
+  function completeTask(id) {
+    const el = document.querySelector(`[data-id="${id}"]`);
+    if (el) el.classList.add('removing');
+    setTimeout(() => {
+      const idx = todos.findIndex(t => t.id === id);
+      if (idx > -1) {
+        const task = todos.splice(idx, 1)[0];
+        completed.unshift(task);
+        logEvent('completed', task.text);
+        saveState();
+        render();
+      }
+    }, 200);
+  }
+
+  function uncompleteTask(id) {
+    const idx = completed.findIndex(t => t.id === id);
+    if (idx > -1) {
+      const task = completed.splice(idx, 1)[0];
+      todos.push(task);
+      logEvent('restored', task.text);
+      saveState();
+      render();
+    }
+  }
+
+  function restoreFromHistory(text, batchId, eventIdx) {
+    // Remove the event from batch history
+    const b = batches.find(x => x.id === batchId);
+    if (b) {
+      b.events.splice(eventIdx, 1);
+      // If batch is now empty, remove it entirely
+      if (b.events.length === 0) {
+        batches = batches.filter(x => x.id !== batchId);
+      }
+    }
+
+    // Add to active list if not already there
+    const compIdx = completed.findIndex(t => t.text === text);
+    if (compIdx > -1) {
+      const task = completed.splice(compIdx, 1)[0];
+      todos.push(task);
+    } else if (!todos.some(t => t.text === text)) {
+      todos.push({ id: Date.now(), text });
+    }
+
+    saveState();
+    render();
+  }
+
+  function deleteTask(id, fromCompleted) {
+    let text = '';
+    if (fromCompleted) {
+      const t = completed.find(t => t.id === id);
+      if (t) text = t.text;
+      completed = completed.filter(t => t.id !== id);
+    } else {
+      const t = todos.find(t => t.id === id);
+      if (t) text = t.text;
+      todos = todos.filter(t => t.id !== id);
+    }
+    if (text) logEvent('deleted', text);
+    saveState();
+    render();
+  }
+
+  function toggleCompleted() {
+    completedOpen = !completedOpen;
+    render();
+  }
+
+  function toggleBatch(batchId) {
+    openBatches[batchId] = !openBatches[batchId];
+    render();
+  }
+
+  function deleteBatch(batchId, e) {
+    e.stopPropagation();
+    batches = batches.filter(b => b.id !== batchId);
+    saveState();
+    render();
+  }
+
+  function renameBatch(batchId, e) {
+    e.stopPropagation();
+    const nameEl = document.querySelector(`[data-batch-name="${batchId}"]`);
+    const current = batches.find(b => b.id === batchId);
+    if (!nameEl || !current) return;
+
+    const inp = document.createElement('input');
+    inp.className = 'batch-name-input';
+    inp.value = current.name;
+    nameEl.replaceWith(inp);
+    inp.focus();
+    inp.select();
+
+    function commit() {
+      const val = inp.value.trim();
+      if (val) current.name = val;
+      saveState();
+      render();
+    }
+
+    inp.addEventListener('blur', commit);
+    inp.addEventListener('keydown', ev => {
+      if (ev.key === 'Enter') { ev.preventDefault(); inp.blur(); }
+      if (ev.key === 'Escape') { inp.blur(); }
+    });
+  }
+
+  function clearAllHistory() {
+    if (!confirm('Clear all history? This cannot be undone.')) return;
+    batches = [];
+    currentBatchId = null;
+    saveState();
+    startBatch();
+    render();
+  }
+
+  // Drag reorder
+  let dragId = null;
+
+  function onDragStart(e, id) {
+    dragId = id;
+    e.dataTransfer.effectAllowed = 'move';
+    requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-id="${id}"]`);
+      if (el) el.classList.add('dragging');
+    });
+  }
+
+  function onDragEnd() {
+    document.querySelectorAll('.task-item').forEach(el => el.classList.remove('dragging', 'drag-over'));
+    dragId = null;
+  }
+
+  function onDragOver(e, id) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    document.querySelectorAll('.task-item').forEach(el => el.classList.remove('drag-over'));
+    if (id !== dragId) {
+      const el = document.querySelector(`[data-id="${id}"]`);
+      if (el) el.classList.add('drag-over');
+    }
+  }
+
+  function onDrop(e, targetId) {
+    e.preventDefault();
+    if (dragId == null || dragId === targetId) return;
+    const fromIdx = todos.findIndex(t => t.id === dragId);
+    const toIdx = todos.findIndex(t => t.id === targetId);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const [moved] = todos.splice(fromIdx, 1);
+    todos.splice(toIdx, 0, moved);
+    dragId = null;
+    saveState();
+    render();
+  }
+
+  function makeItem(task, done) {
+    const div = document.createElement('div');
+    div.className = 'task-item' + (done ? ' done' : '');
+    div.setAttribute('data-id', task.id);
+
+    if (!done) {
+      div.draggable = true;
+      div.addEventListener('dragstart', e => onDragStart(e, task.id));
+      div.addEventListener('dragend', onDragEnd);
+      div.addEventListener('dragover', e => onDragOver(e, task.id));
+      div.addEventListener('drop', e => onDrop(e, task.id));
+    }
+
+    const handle = done ? '' : `<div class="drag-handle" title="Drag to reorder">
+      <svg width="7" height="11" viewBox="0 0 7 11" fill="currentColor">
+        <rect x="1" y="0" width="1.5" height="1.5" rx="0.5"/>
+        <rect x="4.5" y="0" width="1.5" height="1.5" rx="0.5"/>
+        <rect x="1" y="4.5" width="1.5" height="1.5" rx="0.5"/>
+        <rect x="4.5" y="4.5" width="1.5" height="1.5" rx="0.5"/>
+        <rect x="1" y="9" width="1.5" height="1.5" rx="0.5"/>
+        <rect x="4.5" y="9" width="1.5" height="1.5" rx="0.5"/>
+      </svg>
+    </div>`;
+
+    div.innerHTML = `
+      ${handle}
+      <div class="checkbox" onclick="${done ? 'uncompleteTask' : 'completeTask'}(${task.id})">
+        <svg viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
+          <polyline points="2,6 5,9 10,3"/>
+        </svg>
+      </div>
+      <span class="task-text" onclick="${done ? 'uncompleteTask' : 'completeTask'}(${task.id})">${esc(task.text)}</span>
+      <button class="delete-btn" onclick="event.stopPropagation();deleteTask(${task.id},${done})" title="Delete">×</button>
+    `;
+    return div;
+  }
+
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function render() {
+    const todoList = document.getElementById('todoList');
+    const completedList = document.getElementById('completedList');
+    const emptyState = document.getElementById('emptyState');
+    const completedSection = document.getElementById('completedSection');
+    const chevron = document.getElementById('chevron');
+    const countBadge = document.getElementById('completedCount');
+    const taskCount = document.getElementById('taskCount');
+
+    todoList.innerHTML = '';
+    todos.forEach(t => todoList.appendChild(makeItem(t, false)));
+    emptyState.style.display = todos.length ? 'none' : 'block';
+    taskCount.textContent = todos.length + ' open' + (completed.length ? ' · ' + completed.length + ' done' : '');
+
+    completedSection.style.display = completed.length ? 'block' : 'none';
+    countBadge.textContent = completed.length;
+    chevron.className = 'chevron' + (completedOpen ? ' open' : '');
+    completedList.innerHTML = '';
+    completed.forEach(t => completedList.appendChild(makeItem(t, true)));
+    completedList.className = 'completed-list' + (completedOpen ? '' : ' collapsed');
+    if (completedOpen) completedList.style.maxHeight = completedList.scrollHeight + 'px';
+
+    // History
+    const pastBatches = batches.filter(b => b.id !== currentBatchId && b.events.length > 0);
+    const historySection = document.getElementById('historySection');
+    const batchListEl = document.getElementById('batchList');
+
+    historySection.style.display = pastBatches.length ? 'block' : 'none';
+    batchListEl.innerHTML = '';
+
+    pastBatches.forEach(batch => {
+      const isOpen = openBatches[batch.id];
+      const card = document.createElement('div');
+      card.className = 'batch-card';
+
+      const itemsHtml = batch.events.map((ev, idx) => {
+        const svgIcons = {
+          added: `<svg width="10" height="10" viewBox="0 0 10 10" stroke="#fff" stroke-width="2" stroke-linecap="round"><line x1="5" y1="1" x2="5" y2="9"/><line x1="1" y1="5" x2="9" y2="5"/></svg>`,
+          completed: `<svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6 5,9 10,3"/></svg>`,
+          deleted: `<svg width="10" height="10" viewBox="0 0 10 10" stroke="#fff" stroke-width="2" stroke-linecap="round"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg>`,
+          restored: `<svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6 5,9 10,3"/></svg>`
+        };
+        const icon = svgIcons[ev.action] || svgIcons.added;
+        const dotClass = ev.action === 'added' ? 'added' : ev.action === 'completed' ? 'completed' : ev.action === 'deleted' ? 'deleted' : 'restored';
+        const restoreBtn = `<button class="restore-btn" data-restore-batch="${batch.id}" data-restore-idx="${idx}">Restore</button>`;
+        return `<div class="batch-task">
+          <span class="batch-task-icon ${dotClass}">${icon}</span>
+          <span class="batch-task-text">${esc(ev.text)}</span>
+          ${restoreBtn}
+        </div>`;
+      }).join('');
+
+      card.innerHTML = `
+        <div class="batch-header" onclick="toggleBatch(${batch.id})">
+          <span class="batch-chevron ${isOpen ? 'open' : ''}">▶</span>
+          <span class="batch-name" data-batch-name="${batch.id}">${esc(batch.name)}</span>
+          <span class="batch-meta">${batch.events.length}</span>
+          <div class="batch-actions">
+            <button class="batch-action-btn" onclick="renameBatch(${batch.id}, event)" title="Rename">✎</button>
+            <button class="batch-action-btn delete-batch" onclick="deleteBatch(${batch.id}, event)" title="Delete">×</button>
+          </div>
+        </div>
+        <div class="batch-items ${isOpen ? '' : 'collapsed'}">${itemsHtml}</div>
+      `;
+
+      batchListEl.appendChild(card);
+
+      // Bind restore buttons
+      card.querySelectorAll('.restore-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          const bId = Number(btn.dataset.restoreBatch);
+          const eIdx = Number(btn.dataset.restoreIdx);
+          const b = batches.find(x => x.id === bId);
+          if (b && b.events[eIdx]) {
+            restoreFromHistory(b.events[eIdx].text, bId, eIdx);
+          }
+        });
+      });
+
+      if (isOpen) {
+        const itemsEl = card.querySelector('.batch-items');
+        itemsEl.style.maxHeight = itemsEl.scrollHeight + 'px';
+      }
+    });
+  }
+
+  render();
+</script>
+</body>
+</html>
