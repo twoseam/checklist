@@ -2096,6 +2096,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.13.1', date: '2026-05-22', changes: [
+      'Smoother task reorder — a cleaner lift, snappier slide, and a settle',
+    ]},
     { version: '1.13.0', date: '2026-05-22', changes: [
       'Drag a list and the others slide out of the way to make room',
       'Hold a list on top of another for a moment to combine them',
@@ -3353,7 +3356,7 @@
     });
     requestAnimationFrame(() => {
       rows.forEach(r => {
-        r.style.transition = 'transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)';
+        r.style.transition = 'transform 0.17s cubic-bezier(0.2, 0.9, 0.25, 1)';
         r.style.transform = '';
       });
     });
@@ -3377,24 +3380,32 @@
       clone.style.width = rect.width + 'px';
       clone.style.left = '0';
       clone.style.top = '0';
+      // Start the clone flush over the row, then pop it up — the "lift".
+      clone.style.transform = 'translate(' + rect.left + 'px,' + rect.top + 'px) scale(1)';
       document.body.appendChild(clone);
       div.classList.add('task-dragging');
       taskDrag = { source: div, clone, grabX: x - rect.left, grabY: y - rect.top,
                    lastOver: null, cooldownUntil: 0 };
-      moveDrag(x, y);
+      requestAnimationFrame(() => {
+        if (!taskDrag) return;
+        clone.style.transition = 'transform 0.16s ease-out';
+        moveDrag(x, y);
+        setTimeout(() => { if (taskDrag) taskDrag.clone.style.transition = 'none'; }, 175);
+      });
     }
 
     function moveDrag(x, y) {
       if (!taskDrag) return;
       taskDrag.clone.style.transform =
-        'translate(' + (x - taskDrag.grabX) + 'px,' + (y - taskDrag.grabY) + 'px) scale(1.03)';
+        'translate(' + (x - taskDrag.grabX) + 'px,' + (y - taskDrag.grabY)
+        + 'px) scale(1.05) rotate(-2deg)';
       if (Date.now() < taskDrag.cooldownUntil) return;
       const under = document.elementFromPoint(x, y);
       const overRow = under && under.closest('.task-item');
       if (!overRow || overRow === taskDrag.source || overRow.classList.contains('task-lifted')) return;
       if (overRow === taskDrag.lastOver) return;
       taskDrag.lastOver = overRow;
-      taskDrag.cooldownUntil = Date.now() + 130;
+      taskDrag.cooldownUntil = Date.now() + 85;
       flipTaskMove(() => {
         const listEl = taskDrag.source.parentNode;
         const rows = [...listEl.querySelectorAll('.task-item')];
@@ -3409,8 +3420,6 @@
       if (!taskDrag) return;
       const { clone, source } = taskDrag;
       taskDrag = null;
-      clone.remove();
-      source.classList.remove('task-dragging');
       if (commit !== false) {
         const list = activeList();
         const order = [...document.getElementById('todoList').querySelectorAll('.task-item')]
@@ -3419,8 +3428,21 @@
           list.todos.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
           saveState();
         }
+        // Settle: glide the lifted clone down into the row's final slot.
+        const dest = source.getBoundingClientRect();
+        clone.style.transition = 'transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1)';
+        clone.style.transform =
+          'translate(' + dest.left + 'px,' + dest.top + 'px) scale(1) rotate(0deg)';
+        setTimeout(() => {
+          clone.remove();
+          source.classList.remove('task-dragging');
+          render();
+        }, 190);
+      } else {
+        clone.remove();
+        source.classList.remove('task-dragging');
+        render();
       }
-      render();
     }
 
     div.addEventListener('touchstart', e => {
