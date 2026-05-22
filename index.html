@@ -1906,6 +1906,10 @@
       <span class="settings-row-label">Dark mode</span>
       <button class="dark-toggle" id="darkToggle" onclick="toggleDark()" aria-label="Toggle dark mode"></button>
     </div>
+    <div class="settings-row">
+      <span class="settings-row-label">New tasks at top</span>
+      <button class="dark-toggle" id="addTopToggle" onclick="toggleAddTop()" aria-label="Toggle where new tasks go"></button>
+    </div>
     <div class="settings-divider"></div>
     <div class="account-box" id="accountBox"></div>
     <div class="settings-divider"></div>
@@ -2076,6 +2080,7 @@
     }
     st.paletteOn[0] = true;  // slot 1 can never be turned off
     if (typeof st.dark !== 'boolean') st.dark = false;
+    if (typeof st.newTaskTop !== 'boolean') st.newTaskTop = true;
     st.lists.forEach(l => {
       if (typeof l.color !== 'number') {
         const idx = st.palette.indexOf(l.color);
@@ -2088,6 +2093,11 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.12.0', date: '2026-05-22', changes: [
+      'New tasks go to the top of the list. Change it in Settings',
+      'History starts collapsed until you open it',
+      'On a big card, only the checkbox ticks a task off',
+    ]},
     { version: '1.11.5', date: '2026-05-22', changes: [
       'Undo no longer gets wiped when your lists sync',
     ]},
@@ -2287,7 +2297,7 @@
   let editingListId = null;       // list being edited in the modal (null = creating)
   let pickedColor = 0;
   let flashCompletedId = null;    // id of a freshly-completed task, to animate into History
-  let historyOpen = true;         // is the History section expanded
+  let historyOpen = false;        // is the History section expanded
   let cardMenuListId = null;      // list id the ⋯ menu is currently open for
   let dragId = null;
   let paletteLocks = [false, false, false, false, false, false];
@@ -2428,6 +2438,18 @@
     else themeHome();
   }
 
+  // New-task position — top of the list (default) or bottom.
+  function applyAddTop() {
+    const t = document.getElementById('addTopToggle');
+    if (t) t.classList.toggle('on', state.newTaskTop !== false);
+  }
+
+  function toggleAddTop() {
+    state.newTaskTop = !state.newTaskTop;
+    applyAddTop();
+    saveState();
+  }
+
   function themeList(color) {
     const lv = document.getElementById('listView');
     if (state.dark) {
@@ -2491,6 +2513,7 @@
     const list = getList(id);
     if (!list) return;
     activeListId = id;
+    historyOpen = false;   // History starts collapsed each time a list opens
     themeList(listHex(list));
     renderList();
     const lv = document.getElementById('listView');
@@ -2660,9 +2683,12 @@
       });
       attachCardResize(card.querySelector('.card-resize'), list);
 
-      // The 2x2 preview is live — tap a task to check it off.
+      // The 2x2 preview is live — tap the checkbox to tick a task off.
+      // Only the box, so a task is never checked by a stray tap on the row.
       card.querySelectorAll('.card-preview-item').forEach(it => {
-        it.addEventListener('click', e => {
+        const box = it.querySelector('.card-preview-box');
+        if (!box) return;
+        box.addEventListener('click', e => {
           e.stopPropagation();
           if (it.classList.contains('done')) return;
           it.classList.add('done');
@@ -2678,7 +2704,9 @@
           e.preventDefault();
           const text = cardAdd.value.trim();
           if (!text) return;
-          list.todos.push({ id: uid(), text });
+          const t = { id: uid(), text };
+          if (state.newTaskTop) list.todos.unshift(t);
+          else list.todos.push(t);
           saveState();
           renderHome();
           const next = document.querySelector(
@@ -2690,14 +2718,14 @@
       // Tap opens the list; press-and-hold starts a drag-reorder.
       card.addEventListener('touchstart', e => {
         if (e.touches.length !== 1 || e.target.closest('.card-icon-btn')
-            || e.target.closest('.card-resize') || e.target.closest('.card-preview-item')
+            || e.target.closest('.card-resize') || e.target.closest('.card-preview-box')
             || e.target.closest('.card-add')) return;
         lastHomeTouch = Date.now();
         homePressStart(list.id, card, e.touches[0].clientX, e.touches[0].clientY);
       }, { passive: true });
       card.addEventListener('mousedown', e => {
         if (e.button !== 0 || e.target.closest('.card-icon-btn')
-            || e.target.closest('.card-resize') || e.target.closest('.card-preview-item')
+            || e.target.closest('.card-resize') || e.target.closest('.card-preview-box')
             || e.target.closest('.card-add')) return;
         if (Date.now() - lastHomeTouch < 800) return;
         homePressStart(list.id, card, e.clientX, e.clientY);
@@ -3098,13 +3126,16 @@
     if (!list) return;
     const text = input.value.trim();
     if (!text) return;
-    list.todos.push({ id: uid(), text });
+    const task = { id: uid(), text };
+    if (state.newTaskTop) list.todos.unshift(task);
+    else list.todos.push(task);
     input.value = '';
     input.focus();
     saveState();
     render();
     const items = document.getElementById('todoList').children;
-    if (items.length) items[items.length - 1].classList.add('adding');
+    const fresh = state.newTaskTop ? items[0] : items[items.length - 1];
+    if (fresh) fresh.classList.add('adding');
   }
 
   // Slide a row off-screen, collapse its height, then run the data change.
@@ -3149,7 +3180,6 @@
         if (!Array.isArray(list.completed)) list.completed = [];
         list.completed.unshift({ id: cid, text: task.text, at: new Date().toISOString() });
         flashCompletedId = cid;
-        historyOpen = true;
         saveState();
         render();
       }
@@ -3879,6 +3909,8 @@
     paletteLocks = [false, false, false, false, false, false];
     renderPaletteEditor();
     renderAccount();
+    applyDark();
+    applyAddTop();
     document.getElementById('settingsOverlay').classList.add('open');
   }
 
@@ -4416,6 +4448,7 @@
   }
 
   applyDark();
+  applyAddTop();
   renderVersion();
   goHome();
   initSupa();
