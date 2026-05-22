@@ -2041,6 +2041,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.11.0', date: '2026-05-22', changes: [
+      'Undo and redo anything with Cmd+Z and Shift+Cmd+Z',
+    ]},
     { version: '1.10.0', date: '2026-05-22', changes: [
       'Sign in and keep the lists you already made in this browser',
     ]},
@@ -2227,7 +2230,14 @@
   let dragId = null;
   let paletteLocks = [false, false, false, false, false, false];
 
+  // Undo / redo — a stack of whole-state snapshots.
+  let history = [];
+  let historyIndex = -1;
+  let lastSnapAt = 0;
+  let restoringHistory = false;
+
   applyPalette();
+  resetHistory();
 
   function saveState() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -2235,6 +2245,64 @@
     // it stays free of any account data.
     if (!authUser) localStorage.setItem(LOCAL_KEY, JSON.stringify(state));
     queueCloudPush();
+    snapshotHistory();
+  }
+
+  // Start a fresh history from the current state (boot, sign-in, sign-out).
+  function resetHistory() {
+    history = [JSON.stringify(state)];
+    historyIndex = 0;
+    lastSnapAt = Date.now();
+  }
+
+  // Record a snapshot after a change. A rapid burst (e.g. dragging a colour
+  // slider) coalesces into the previous step, so one tweak is one undo.
+  function snapshotHistory() {
+    if (restoringHistory) return;
+    const json = JSON.stringify(state);
+    if (history[historyIndex] === json) return;
+    history = history.slice(0, historyIndex + 1);
+    const now = Date.now();
+    if (now - lastSnapAt < 350 && historyIndex >= 1) {
+      history[historyIndex] = json;
+    } else {
+      history.push(json);
+      if (history.length > 80) history.shift();
+      historyIndex = history.length - 1;
+    }
+    lastSnapAt = now;
+  }
+
+  function undo() {
+    if (historyIndex <= 0) return;
+    historyIndex--;
+    applyHistory(history[historyIndex]);
+  }
+
+  function redo() {
+    if (historyIndex >= history.length - 1) return;
+    historyIndex++;
+    applyHistory(history[historyIndex]);
+  }
+
+  // Restore a snapshot without recording it as a new step.
+  function applyHistory(json) {
+    restoringHistory = true;
+    state = normalizeState(JSON.parse(json));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if (!authUser) localStorage.setItem(LOCAL_KEY, JSON.stringify(state));
+    queueCloudPush();
+    applyPalette();
+    applyDark();
+    if (activeListId && !getList(activeListId)) activeListId = null;
+    if (activeListId && activeList()) {
+      themeList(listHex(activeList()));
+      renderList();
+    } else {
+      document.getElementById('listView').classList.remove('active');
+      renderHome();
+    }
+    restoringHistory = false;
   }
 
   function getList(id) { return state.lists.find(l => l.id === id); }
@@ -3835,6 +3903,17 @@
     if (e.key === 'Escape') { closeFeedback(); closeWelcome(); closeHsl(); closeChangelog(); closeSettings(); closeListModal(); closeConfirm(); closeCardMenu(); closeTaskMenu(); }
   });
 
+  // Undo / redo — Cmd/Ctrl+Z, add Shift to redo. Skipped while a text field
+  // is focused, so the browser's own text undo still works there.
+  document.addEventListener('keydown', e => {
+    if ((e.key === 'z' || e.key === 'Z') && (e.metaKey || e.ctrlKey)) {
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      e.preventDefault();
+      if (e.shiftKey) redo(); else undo();
+    }
+  });
+
   // Swipe a list to the right to slide back to all lists.
   (function () {
     const lv = document.getElementById('listView');
@@ -3999,6 +4078,7 @@
         state = normalizeState(data.state);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
         adoptingCloud = false;
+        resetHistory();
         applyPalette();
         applyDark();
         activeListId = null;
@@ -4073,6 +4153,7 @@
           state = normalizeState(incoming);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
           adoptingCloud = false;
+          resetHistory();
           applyPalette();
           applyDark();
           if (activeListId && activeList()) themeList(listHex(activeList()));
@@ -4133,6 +4214,7 @@
     }
     state = normalizeState(local);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    resetHistory();
     applyPalette();
     activeListId = null;
     goHome();
