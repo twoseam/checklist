@@ -4133,14 +4133,27 @@
     });
   }
 
+  // TEMP diagnostic for the guest-merge bug. Visit the site once with
+  // ?jotdebug in the URL to switch it on; it then pops an info box on
+  // sign-in. Visit with ?jotdebugoff to switch it back off.
+  try {
+    if (location.search.indexOf('jotdebugoff') >= 0) localStorage.removeItem('jotdebug');
+    else if (location.search.indexOf('jotdebug') >= 0) localStorage.setItem('jotdebug', '1');
+  } catch (e) {}
+  function dbg(m) {
+    try { if (localStorage.getItem('jotdebug')) alert('[JotList debug]\n' + m); } catch (e) {}
+  }
+
   // Bring the signed-in user's lists down from the cloud.
   async function pullCloud() {
     if (!supa || !authUser) return;
     try {
       const { data, error } = await supa
         .from('user_data').select('state').eq('user_id', authUser.id).maybeSingle();
-      if (error) return;
+      if (error) { dbg('pullCloud query ERROR:\n' + (error.message || error)); return; }
       if (data && data.state && Array.isArray(data.state.lists)) {
+        dbg('pullCloud: cloud branch — account has '
+          + data.state.lists.length + ' lists');
         adoptingCloud = true;
         state = normalizeState(data.state);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -4152,10 +4165,14 @@
         goHome();
         offerGuestMerge();
       } else {
+        dbg('pullCloud: ELSE branch — no cloud row, local lists pushed up');
         // First sign-in: no cloud row yet — carry the local lists up.
         pushCloud();
       }
-    } catch (e) { console.warn('JotList pullCloud:', e); }
+    } catch (e) {
+      dbg('pullCloud threw:\n' + (e && e.message ? e.message : e));
+      console.warn('JotList pullCloud:', e);
+    }
   }
 
   // After sign-in, the account's lists replace the browser's. If the browser
@@ -4164,14 +4181,22 @@
   // signed out, untouched by signing in — so that is the reliable source.
   function offerGuestMerge() {
     let browserLists = [];
+    const raw = localStorage.getItem(LOCAL_KEY);
     try {
-      const b = JSON.parse(localStorage.getItem(LOCAL_KEY) || 'null');
+      const b = JSON.parse(raw || 'null');
       if (b && Array.isArray(b.lists)) browserLists = b.lists;
     } catch (e) {}
     const accountIds = new Set(state.lists.map(l => l.id));
     const extras = browserLists.filter(l =>
       l && !accountIds.has(l.id) &&
       ((l.todos && l.todos.length) || (l.completed && l.completed.length)));
+    dbg('offerGuestMerge\n'
+      + 'checklist_browser: ' + (raw ? 'present' : 'MISSING') + '\n'
+      + 'browser lists (' + browserLists.length + '): '
+      + browserLists.map(l => (l && l.name) + '[' + ((l && l.todos) ? l.todos.length : 0) + 't]').join(', ') + '\n'
+      + 'account lists (' + state.lists.length + '): '
+      + state.lists.map(l => l && l.name).join(', ') + '\n'
+      + 'extras to offer: ' + extras.length);
     if (!extras.length) return;
     const n = extras.length;
     showConfirm({
