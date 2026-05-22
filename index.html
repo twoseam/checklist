@@ -2096,6 +2096,10 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.13.3', date: '2026-05-22', changes: [
+      'Fixed: signed out, you only ever see your own browser lists',
+      'Signing in now offers your browser lists even the empty ones',
+    ]},
     { version: '1.13.2', date: '2026-05-22', changes: [
       'Fixed: signing in now reliably offers to add your browser lists',
     ]},
@@ -2269,9 +2273,26 @@
     };
   }
 
+  // True if a Supabase auth session is stored in this browser.
+  function hasSupabaseSession() {
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.indexOf('sb-') === 0 && k.indexOf('-auth-token') > 0) {
+          const v = localStorage.getItem(k);
+          if (v && v.length > 20) return true;
+        }
+      }
+    } catch (e) {}
+    return false;
+  }
+
   function loadState() {
+    // Signed in → checklist_data (the account's lists). Signed out → only
+    // the browser's own lists — never leak account data into the guest view.
     let raw = null;
-    try { raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch (e) {}
+    const key = hasSupabaseSession() ? STORAGE_KEY : LOCAL_KEY;
+    try { raw = JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) {}
 
     let st;
     if (raw && Array.isArray(raw.lists)) {
@@ -4129,19 +4150,42 @@
       const wasSignedIn = !!authUser;
       authUser = sess ? sess.user : null;
       renderAccount();
-      if (authUser && !wasSignedIn) { pullCloud(); subscribeCloud(); }
+      if (authUser && !wasSignedIn) {
+        pullCloud();
+        subscribeCloud();
+      } else if (!authUser) {
+        // No session — never leave the account's lists on screen.
+        if (cloudChannel) { supa.removeChannel(cloudChannel); cloudChannel = null; }
+        restoreBrowserState();
+      }
     });
   }
 
-  // TEMP diagnostic for the guest-merge bug. Visit the site once with
-  // ?jotdebug in the URL to switch it on; it then pops an info box on
-  // sign-in. Visit with ?jotdebugoff to switch it back off.
-  try {
-    if (location.search.indexOf('jotdebugoff') >= 0) localStorage.removeItem('jotdebug');
-    else if (location.search.indexOf('jotdebug') >= 0) localStorage.setItem('jotdebug', '1');
-  } catch (e) {}
-  function dbg(m) {
-    try { if (localStorage.getItem('jotdebug')) alert('[JotList debug]\n' + m); } catch (e) {}
+  // Switch the working state to this browser's own lists (LOCAL_KEY).
+  // Used whenever there is no signed-in session, so account data is never
+  // shown in the signed-out view.
+  function restoreBrowserState() {
+    let local = null;
+    try { local = JSON.parse(localStorage.getItem(LOCAL_KEY) || 'null'); } catch (e) {}
+    const haveBrowser = local && Array.isArray(local.lists);
+    if (haveBrowser
+        && state.lists.map(l => l.id).join(',') === local.lists.map(l => l.id).join(',')) {
+      return;   // already showing the browser's lists — nothing to do
+    }
+    if (!haveBrowser) {
+      local = { lists: [
+        newList('JotList 1', 0, DEFAULT_TODOS),
+        newList('JotList 2', 1, DEFAULT_TODOS),
+      ] };
+    }
+    state = normalizeState(local);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if (!haveBrowser) localStorage.setItem(LOCAL_KEY, JSON.stringify(state));
+    resetHistory();
+    applyPalette();
+    applyDark();
+    activeListId = null;
+    goHome();
   }
 
   // Bring the signed-in user's lists down from the cloud.
@@ -4150,10 +4194,8 @@
     try {
       const { data, error } = await supa
         .from('user_data').select('state').eq('user_id', authUser.id).maybeSingle();
-      if (error) { dbg('pullCloud query ERROR:\n' + (error.message || error)); return; }
+      if (error) return;
       if (data && data.state && Array.isArray(data.state.lists)) {
-        dbg('pullCloud: cloud branch — account has '
-          + data.state.lists.length + ' lists');
         adoptingCloud = true;
         state = normalizeState(data.state);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -4165,14 +4207,10 @@
         goHome();
         offerGuestMerge();
       } else {
-        dbg('pullCloud: ELSE branch — no cloud row, local lists pushed up');
         // First sign-in: no cloud row yet — carry the local lists up.
         pushCloud();
       }
-    } catch (e) {
-      dbg('pullCloud threw:\n' + (e && e.message ? e.message : e));
-      console.warn('JotList pullCloud:', e);
-    }
+    } catch (e) { console.warn('JotList pullCloud:', e); }
   }
 
   // After sign-in, the account's lists replace the browser's. If the browser
@@ -4181,22 +4219,14 @@
   // signed out, untouched by signing in — so that is the reliable source.
   function offerGuestMerge() {
     let browserLists = [];
-    const raw = localStorage.getItem(LOCAL_KEY);
     try {
-      const b = JSON.parse(raw || 'null');
+      const b = JSON.parse(localStorage.getItem(LOCAL_KEY) || 'null');
       if (b && Array.isArray(b.lists)) browserLists = b.lists;
     } catch (e) {}
     const accountIds = new Set(state.lists.map(l => l.id));
-    const extras = browserLists.filter(l =>
-      l && !accountIds.has(l.id) &&
-      ((l.todos && l.todos.length) || (l.completed && l.completed.length)));
-    dbg('offerGuestMerge\n'
-      + 'checklist_browser: ' + (raw ? 'present' : 'MISSING') + '\n'
-      + 'browser lists (' + browserLists.length + '): '
-      + browserLists.map(l => (l && l.name) + '[' + ((l && l.todos) ? l.todos.length : 0) + 't]').join(', ') + '\n'
-      + 'account lists (' + state.lists.length + '): '
-      + state.lists.map(l => l && l.name).join(', ') + '\n'
-      + 'extras to offer: ' + extras.length);
+    // Any list this browser has that the account does not — empty or not;
+    // a list the user named is theirs even with no tasks yet.
+    const extras = browserLists.filter(l => l && !accountIds.has(l.id));
     if (!extras.length) return;
     const n = extras.length;
     showConfirm({
@@ -4313,24 +4343,10 @@
   async function signOut() {
     if (!supa) return;
     if (cloudChannel) { supa.removeChannel(cloudChannel); cloudChannel = null; }
-    await supa.auth.signOut();
     authUser = null;
     renderAccount();
-    // Drop the account's lists from this device and restore the browser's own.
-    let local = null;
-    try { local = JSON.parse(localStorage.getItem(LOCAL_KEY) || 'null'); } catch (e) {}
-    if (!local || !Array.isArray(local.lists)) {
-      local = { lists: [
-        newList('JotList 1', 0, DEFAULT_TODOS),
-        newList('JotList 2', 1, DEFAULT_TODOS),
-      ] };
-    }
-    state = normalizeState(local);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    resetHistory();
-    applyPalette();
-    activeListId = null;
-    goHome();
+    restoreBrowserState();   // drop the account's lists, show the browser's own
+    try { await supa.auth.signOut(); } catch (e) {}
   }
 
   function renderAccount() {
