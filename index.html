@@ -646,12 +646,12 @@
     backdrop-filter: blur(14px) saturate(1.6);
     -webkit-backdrop-filter: blur(14px) saturate(1.6);
     box-shadow: 0 3px 14px rgba(0,0,0,0.18);
-    color: var(--brand-2);
+    color: #36373c;
     cursor: pointer;
     transition: background 0.15s, opacity 0.2s, transform 0.12s;
   }
 
-  /* Dark mode: a dark brand colour would vanish on charcoal — keep it light. */
+  /* Dark mode: charcoal would vanish on a charcoal backdrop — keep it light. */
   html.dark .footer-btn,
   html.dark .settings-btn { color: var(--on-bg); }
 
@@ -776,36 +776,6 @@
   }
 
   .add-btn:hover { background: var(--accent-hover); }
-
-  /* Utility toolbar — copy / paste a list */
-  .list-tools {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 12px;
-  }
-
-  .tool-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-family: inherit;
-    font-size: 0.74rem;
-    font-weight: 700;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-    color: var(--brand-2);
-    background: var(--surface);
-    border: none;
-    border-radius: var(--radius-sm);
-    padding: 8px 13px;
-    cursor: pointer;
-    transition: transform 0.1s, filter 0.12s;
-  }
-
-  html.dark .tool-btn { color: var(--text); }
-  .tool-btn:hover { filter: brightness(0.96); }
-  .tool-btn:active { transform: scale(0.95); }
-  .tool-btn svg { flex-shrink: 0; }
 
   /* Task list */
   .task-list {
@@ -2030,17 +2000,6 @@
     <button class="add-btn" onclick="addTask()">Add</button>
   </div>
 
-  <div class="list-tools">
-    <button class="tool-btn" id="copyBtn" onclick="copyList()" title="Copy this list (⌘C)">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-      <span>Copy</span>
-    </button>
-    <button class="tool-btn" id="pasteBtn" onclick="pasteList()" title="Paste tasks (⌘V)">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
-      <span>Paste</span>
-    </button>
-  </div>
-
   <div class="task-list" id="todoList"></div>
   <div class="empty-state" id="emptyState">No tasks yet</div>
 
@@ -2210,6 +2169,7 @@
     <label class="field-label">Color</label>
     <div class="color-picker" id="colorPicker"></div>
     <div class="modal-actions">
+      <button class="modal-btn-primary modal-btn-danger" id="listModalDelete" onclick="deleteFromModal()" style="margin-right:auto;display:none">Delete list</button>
       <button class="modal-btn-secondary" onclick="closeListModal()">Cancel</button>
       <button class="modal-btn-primary" id="listModalSave" onclick="saveListModal()">Save</button>
     </div>
@@ -2280,6 +2240,13 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.16.0', date: '2026-05-22', changes: [
+      'Swipe to complete, delete or go back now works with a mouse too',
+      'A 2×2 card on the right edge expands leftward to fit',
+      'Delete a list straight from its edit screen',
+      'New-list name field is focused and ready to type',
+      'Feature requests are emailed to the team',
+    ]},
     { version: '1.15.0', date: '2026-05-22', changes: [
       'Free placement is back — drop a list in any cell, leave gaps',
       'Drop a card on another to push it aside; dead-centre combines them',
@@ -3094,7 +3061,11 @@
       const grid = document.getElementById('listGrid');
       const cell = parseFloat(grid.dataset.cell) || 160;
       const gap = parseFloat(grid.dataset.gap) || 10;
-      resizeState = { list, card: handle.closest('.list-card'), x0: e.clientX, y0: e.clientY, cell };
+      resizeState = {
+        list, card: handle.closest('.list-card'),
+        x0: e.clientX, y0: e.clientY, cell,
+        originC: (list.pos[gridCols()] || { c: 0 }).c,
+      };
       grid.classList.add('resizing');
       grid.style.backgroundSize = (cell + gap) + 'px ' + (cell + gap) + 'px';
       document.addEventListener('pointermove', onResizeMove);
@@ -3114,18 +3085,27 @@
 
   function onResizeMove(e) {
     if (!resizeState) return;
-    const { list, card, cell } = resizeState;
+    const { list, card, cell, originC } = resizeState;
+    const cols = gridCols();
     const reach = Math.max(e.clientX - resizeState.x0, e.clientY - resizeState.y0);
     const cur = card.classList.contains('big') ? 2 : 1;
     let want = cur;
     if (cur === 1 && reach > cell * 0.4) want = 2;
     if (cur === 2 && reach < -cell * 0.4) want = 1;
     if (want === cur) return;
+    const p = list.pos[cols];
     if (want === 2) {
-      // Only grow if the three extra cells are free and on-grid.
-      const cols = gridCols();
-      const p = list.pos[cols];
-      if (!cellsFree(gridOccupancy(cols, list.id), p.c, p.r, 2, cols)) return;
+      const occ = gridOccupancy(cols, list.id);
+      // Grow rightward by default; if the right edge blocks it, grow left
+      // instead, so a card on either edge can still expand.
+      let anchorC = originC;
+      if (!cellsFree(occ, anchorC, p.r, 2, cols)) {
+        if (cellsFree(occ, anchorC - 1, p.r, 2, cols)) anchorC -= 1;
+        else return;   // no room on either side
+      }
+      p.c = anchorC;
+    } else {
+      p.c = originC;   // shrink back to the card's original cell
     }
     setCardSpan(card, list, want);
   }
@@ -3410,7 +3390,9 @@
           state.lists.push(newList('List 1', 0, []));
         }
         saveState();
-        renderHome();
+        // If the open list was the one deleted, fall back to the home view.
+        if (activeListId === id) goHome();
+        else renderHome();
       },
     });
   }
@@ -3449,12 +3431,23 @@
     if (!state.paletteOn[pickedColor]) pickedColor = 0;
     renderColorPicker();
     styleSaveBtn();
+    document.getElementById('listModalDelete').style.display = editingListId ? '' : 'none';
     document.getElementById('listModalOverlay').classList.add('open');
-    setTimeout(() => document.getElementById('listNameField').focus(), 50);
+    // Focus synchronously so the mobile keyboard rises right away.
+    const field = document.getElementById('listNameField');
+    field.focus();
+    if (editingListId) field.select();
   }
 
   function closeListModal() {
     document.getElementById('listModalOverlay').classList.remove('open');
+  }
+
+  // Delete the list being edited — deleteList runs its own confirm dialog.
+  function deleteFromModal() {
+    const id = editingListId;
+    closeListModal();
+    if (id != null) deleteList(id);
   }
 
   // The next free "List N" name, for a list created without a name.
@@ -3525,20 +3518,6 @@
     btn._flashTimer = setTimeout(() => { span.textContent = span.dataset.label; }, 1100);
   }
 
-  function copyList() {
-    const list = activeList();
-    if (!list) return;
-    if (!list.todos.length) { flashTool('copyBtn', 'Empty'); return; }
-    const text = listToBullets(list);
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text)
-        .then(() => flashTool('copyBtn', 'Copied'))
-        .catch(() => flashTool('copyBtn', 'Failed'));
-    } else {
-      flashTool('copyBtn', 'Failed');
-    }
-  }
-
   // Each non-empty line becomes a task; a leading bullet / dash is stripped.
   function addTasksFromText(text) {
     const list = activeList();
@@ -3555,19 +3534,6 @@
     return tasks.length;
   }
 
-  function pasteList() {
-    if (!activeList()) return;
-    if (navigator.clipboard && navigator.clipboard.readText) {
-      navigator.clipboard.readText()
-        .then(txt => {
-          const n = addTasksFromText(txt);
-          flashTool('pasteBtn', n ? ('Added ' + n) : 'Nothing');
-        })
-        .catch(() => flashTool('pasteBtn', 'Failed'));
-    } else {
-      flashTool('pasteBtn', 'Failed');
-    }
-  }
 
   // Slide a row off-screen, collapse its height, then run the data change.
   function exitTask(id, dir) {
@@ -3754,9 +3720,11 @@
       e.stopPropagation();
       completeTask(task.id);
     });
-    // Click / tap the text to edit it inline.
+    // Click / tap the text to edit it inline — but not if that click is
+    // the tail end of a mouse swipe.
     div.querySelector('.task-text').addEventListener('click', e => {
       e.stopPropagation();
+      if (div._swiped) { div._swiped = false; return; }
       startEditTask(task.id);
     });
 
@@ -3939,27 +3907,58 @@
     div.addEventListener('touchend', endTouch);
     div.addEventListener('touchcancel', endTouch);
 
-    // Desktop: press-and-hold with the mouse to drag-reorder, same as touch.
+    // Desktop: click-and-drag is a swipe (sideways) or a reorder (hold),
+    // mirroring touch.
     function onTaskMouseMove(e) {
       if (taskDrag) { moveDrag(e.clientX, e.clientY); return; }
-      if (Math.abs(e.clientX - x0) > HOLD_SLOP || Math.abs(e.clientY - y0) > HOLD_SLOP) {
+      if (!track) return;
+      const mx = e.clientX - x0, my = e.clientY - y0;
+      if (!decided) {
+        if (Math.abs(mx) < HOLD_SLOP && Math.abs(my) < HOLD_SLOP) return;
+        decided = true;
         clearHold();
+        horiz = Math.abs(mx) > Math.abs(my);
+        if (horiz) div.classList.add('swiping');
+        else { track = false; return; }
       }
+      if (!horiz) return;
+      d = mx;
+      face.style.transform = 'translateX(' + d + 'px)';
+      const armed = Math.abs(d) > armDist();
+      bg.className = 'task-action-bg ' + (d > 0 ? 'show-complete' : 'show-delete') + (armed ? ' armed' : '');
     }
     function onTaskMouseUp() {
       clearHold();
       document.removeEventListener('mousemove', onTaskMouseMove);
       document.removeEventListener('mouseup', onTaskMouseUp);
-      if (taskDrag) endDrag(true);
+      if (taskDrag) { endDrag(true); track = false; return; }
+      if (!track) return;
+      track = false;
+      if (!horiz) return;
+      div.classList.remove('swiping');
+      div._swiped = true;   // so the trailing click doesn't open the editor
+      const armed = Math.abs(d) > armDist();
+      if (armed && d > 0) {
+        completeTask(id);
+      } else if (armed && d < 0) {
+        deleteTask(id);
+      } else {
+        face.style.transition = 'transform 0.2s cubic-bezier(0.2,0.8,0.2,1)';
+        face.style.transform = '';
+        bg.className = 'task-action-bg';
+        setTimeout(() => { face.style.transition = ''; }, 220);
+      }
+      d = 0;
     }
     div.addEventListener('mousedown', e => {
       if (e.button !== 0) return;
-      // Don't start a drag from the checkbox or the inline edit field —
-      // the field needs free clicks + text selection.
+      // Don't start from the checkbox or the inline edit field — the field
+      // needs free clicks + text selection.
       if (e.target.closest('.checkbox') || e.target.closest('.task-edit-input')) return;
       if (Date.now() - lastTaskTouch < 800) return;   // ignore touch-synth clicks
       x0 = e.clientX;
       y0 = e.clientY;
+      d = 0; decided = false; horiz = false; track = true;
       clearHold();
       holdTimer = setTimeout(() => beginDrag(x0, y0), HOLD_MS);
       document.addEventListener('mousemove', onTaskMouseMove);
@@ -4067,6 +4066,37 @@
     }
     div.addEventListener('touchend', endSwipe);
     div.addEventListener('touchcancel', endSwipe);
+
+    // Desktop: click-and-drag sideways is the same swipe.
+    function onDoneMouseMove(e) {
+      if (!track) return;
+      const mx = e.clientX - x0, my = e.clientY - y0;
+      if (!decided) {
+        if (Math.abs(mx) < 9 && Math.abs(my) < 9) return;
+        decided = true;
+        horiz = Math.abs(mx) > Math.abs(my);
+        if (horiz) div.classList.add('swiping');
+        else { track = false; return; }
+      }
+      if (!horiz) return;
+      d = mx;
+      face.style.transform = 'translateX(' + d + 'px)';
+      const armed = Math.abs(d) > armDist();
+      bg.className = 'done-action-bg ' + (d > 0 ? 'show-restore' : 'show-delete') + (armed ? ' armed' : '');
+    }
+    function onDoneMouseUp() {
+      document.removeEventListener('mousemove', onDoneMouseMove);
+      document.removeEventListener('mouseup', onDoneMouseUp);
+      endSwipe();
+    }
+    div.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      if (e.target.closest('.done-check') || e.target.closest('.done-del')) return;
+      x0 = e.clientX; y0 = e.clientY;
+      d = 0; decided = false; horiz = false; track = true;
+      document.addEventListener('mousemove', onDoneMouseMove);
+      document.addEventListener('mouseup', onDoneMouseUp);
+    });
   }
 
   function renderList() {
@@ -4497,6 +4527,35 @@
     }
     lv.addEventListener('touchend', endSwipe);
     lv.addEventListener('touchcancel', endSwipe);
+
+    // Desktop: click-and-drag to the right slides back. Started only from
+    // dead areas, so it never fights a task-row swipe.
+    function onLvMouseMove(e) {
+      if (!tracking) return;
+      const mx = e.clientX - startX, my = e.clientY - startY;
+      if (!decided) {
+        if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
+        decided = true;
+        horizontal = mx > 0 && Math.abs(mx) > Math.abs(my);
+        if (horizontal) { lv.classList.add('dragging'); renderHome(); }
+      }
+      if (!horizontal) return;
+      dx = Math.max(0, mx);
+      lv.style.transform = 'translateX(' + dx + 'px)';
+    }
+    function onLvMouseUp() {
+      document.removeEventListener('mousemove', onLvMouseMove);
+      document.removeEventListener('mouseup', onLvMouseUp);
+      endSwipe();
+    }
+    lv.addEventListener('mousedown', e => {
+      if (e.button !== 0 || !activeListId) { tracking = false; return; }
+      if (e.target.closest('.task-item, .done-item, input, textarea, button')) return;
+      startX = e.clientX; startY = e.clientY; startT = Date.now();
+      dx = 0; tracking = true; decided = false; horizontal = false;
+      document.addEventListener('mousemove', onLvMouseMove);
+      document.addEventListener('mouseup', onLvMouseUp);
+    });
   })();
 
   // Swipe the settings sheet down to dismiss it. The dismiss drag only
@@ -4542,6 +4601,34 @@
     }
     drawer.addEventListener('touchend', endSwipe);
     drawer.addEventListener('touchcancel', endSwipe);
+
+    // Desktop: click-and-drag the grip or header down to dismiss.
+    function onDrawerMouseMove(e) {
+      if (!tracking) return;
+      const mx = e.clientX - startX, my = e.clientY - startY;
+      if (!decided) {
+        if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
+        decided = true;
+        vert = my > 0 && Math.abs(my) > Math.abs(mx);
+        if (vert) drawer.style.transition = 'none';
+      }
+      if (!vert) return;
+      dy = Math.max(0, my);
+      drawer.style.transform = 'translateY(' + dy + 'px)';
+    }
+    function onDrawerMouseUp() {
+      document.removeEventListener('mousemove', onDrawerMouseMove);
+      document.removeEventListener('mouseup', onDrawerMouseUp);
+      endSwipe();
+    }
+    drawer.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      if (!e.target.closest('.drawer-grip') && !e.target.closest('.modal-header')) return;
+      startX = e.clientX; startY = e.clientY;
+      dy = 0; tracking = true; decided = false; vert = false;
+      document.addEventListener('mousemove', onDrawerMouseMove);
+      document.addEventListener('mouseup', onDrawerMouseUp);
+    });
   })();
 
   // Pin views to the window height. iOS standalone miscomputes the height
@@ -5012,8 +5099,12 @@
     document.getElementById('feedbackOverlay').classList.remove('open');
   }
 
-  // The request is stored in Supabase (table `feature_requests`) — no email
-  // address is ever shown to the user. A confirmation panel replaces the form.
+  // Google Apps Script web app that emails each request straight to the
+  // owner's inbox. Requests are also kept in Supabase as a backup.
+  const FEEDBACK_RELAY = 'https://script.google.com/macros/s/AKfycbz26ypK7hcip42FOxxtY4g4rjBs5MY1gJvu-ZEJJDWwMe2M31NOGjRNp6AQUOWy0XaKpQ/exec';
+
+  // Emails the request to the owner via the relay, and keeps a copy in
+  // Supabase. A confirmation panel replaces the form on success.
   async function sendFeedback() {
     const msg = document.getElementById('feedbackText').value.trim();
     if (!msg) return;
@@ -5022,6 +5113,17 @@
     btn.disabled = true;
     btn.textContent = 'Sending…';
     let ok = false;
+    if (FEEDBACK_RELAY) {
+      try {
+        await fetch(FEEDBACK_RELAY, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ message: msg, email: email }),
+        });
+        ok = true;
+      } catch (e) {}
+    }
     if (supa) {
       try {
         const { error } = await supa.from('feature_requests').insert({
@@ -5029,7 +5131,7 @@
           email: email || null,
           user_id: authUser ? authUser.id : null,
         });
-        ok = !error;
+        if (!FEEDBACK_RELAY) ok = !error;
       } catch (e) {}
     }
     if (ok) {
