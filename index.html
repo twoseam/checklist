@@ -840,6 +840,7 @@
 
   /* Settings gear */
   .settings-btn {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -852,6 +853,19 @@
     color: var(--on-bg);
     cursor: pointer;
     transition: background 0.15s, transform 0.25s ease;
+  }
+
+  /* A small green dot on the gear when signed in — your lists are synced. */
+  .settings-btn.synced::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 0 2.5px var(--surface);
   }
 
   .settings-btn:hover {
@@ -1028,6 +1042,8 @@
     border-color: var(--accent);
     color: #fff;
   }
+
+  .settings-apply { width: 100%; margin-top: 14px; }
 
   /* Account / sign-in section in Settings */
   .settings-divider {
@@ -1385,8 +1401,9 @@
     <div class="palette-editor" id="paletteEditor"></div>
     <div class="palette-actions">
       <button class="palette-btn" onclick="resetPalette()">Set to Default</button>
-      <button class="palette-btn primary" onclick="regeneratePalette()">Generate New</button>
+      <button class="palette-btn" onclick="regeneratePalette()">Generate New</button>
     </div>
+    <button class="palette-btn primary settings-apply" onclick="closeSettings()">Apply</button>
   </div>
 </div>
 
@@ -1472,9 +1489,9 @@
 
 <script>
   const STORAGE_KEY = 'checklist_data';
-  // The browser's own lists, snapshotted at sign-in and restored at sign-out
-  // so a signed-in account's (possibly private) lists never linger after.
-  const LOCAL_KEY = 'checklist_local';
+  // The browser's own lists. Written ONLY while signed out, so it can never
+  // pick up an account's data; restored at sign-out.
+  const LOCAL_KEY = 'checklist_browser';
   // The six brand-palette slots. DEFAULT_PALETTE is the factory setting; the
   // live palette lives in state.palette and may be user-generated in Settings.
   const DEFAULT_PALETTE = ['#c0392b', '#222e50', '#007991', '#4caf68', '#f3a712', '#7226f0'];
@@ -1666,6 +1683,9 @@
 
   function saveState() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    // Keep the browser's own copy current — but only while signed out, so
+    // it stays free of any account data.
+    if (!authUser) localStorage.setItem(LOCAL_KEY, JSON.stringify(state));
     queueCloudPush();
   }
 
@@ -3079,8 +3099,6 @@
 
   async function signIn() {
     if (!supa) return;
-    // Preserve this browser's own lists before the account takes over.
-    localStorage.setItem(LOCAL_KEY, JSON.stringify(state));
     await supa.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: location.origin + location.pathname },
@@ -3110,6 +3128,8 @@
   }
 
   function renderAccount() {
+    const sb = document.getElementById('settingsBtn');
+    if (sb) sb.classList.toggle('synced', !!authUser);
     const box = document.getElementById('accountBox');
     if (!box) return;
     if (authUser) {
