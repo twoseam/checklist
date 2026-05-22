@@ -2088,6 +2088,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.11.4', date: '2026-05-22', changes: [
+      'Fixed undo so every checked-off task is its own step',
+    ]},
     { version: '1.11.3', date: '2026-05-22', changes: [
       'A frosted-glass look for the footer buttons',
     ]},
@@ -2289,8 +2292,8 @@
   // Undo / redo — a stack of whole-state snapshots.
   let history = [];
   let historyIndex = -1;
-  let lastSnapAt = 0;
   let restoringHistory = false;
+  let hslEditing = false;   // true while the colour picker is open
 
   applyPalette();
   resetHistory();
@@ -2308,7 +2311,6 @@
   function resetHistory() {
     history = [JSON.stringify(state)];
     historyIndex = 0;
-    lastSnapAt = Date.now();
     updateHistoryButtons();
   }
 
@@ -2321,22 +2323,17 @@
     r.classList.toggle('ghosted', historyIndex >= history.length - 1);
   }
 
-  // Record a snapshot after a change. A rapid burst (e.g. dragging a colour
-  // slider) coalesces into the previous step, so one tweak is one undo.
+  // Record a snapshot after a change — one change, one undo step. Snapshots
+  // are skipped while the colour picker is open (its slider fires constantly);
+  // closeHsl() takes a single snapshot for the whole colour edit.
   function snapshotHistory() {
-    if (restoringHistory) return;
+    if (restoringHistory || hslEditing) return;
     const json = JSON.stringify(state);
     if (history[historyIndex] === json) return;
     history = history.slice(0, historyIndex + 1);
-    const now = Date.now();
-    if (now - lastSnapAt < 350 && historyIndex >= 1) {
-      history[historyIndex] = json;
-    } else {
-      history.push(json);
-      if (history.length > 80) history.shift();
-      historyIndex = history.length - 1;
-    }
-    lastSnapAt = now;
+    history.push(json);
+    if (history.length > 80) history.shift();
+    historyIndex = history.length - 1;
     updateHistoryButtons();
   }
 
@@ -3836,6 +3833,7 @@
 
   function openHsl(i) {
     hslSlot = i;
+    hslEditing = true;
     const c = hexToHsl(state.palette[i]);
     document.getElementById('hslH').value = Math.round(c.h);
     document.getElementById('hslS').value = Math.round(c.s);
@@ -3869,6 +3867,9 @@
   function closeHsl() {
     hslSlot = -1;
     document.getElementById('hslOverlay').classList.remove('open');
+    // One undo step for the whole colour edit.
+    hslEditing = false;
+    snapshotHistory();
   }
 
   function openSettings() {
