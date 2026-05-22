@@ -315,10 +315,8 @@
 
   .list-grid.reordering .list-card:hover { transform: none; }
 
-  /* A 2x2 card — fills its grid area (square by construction) */
+  /* A 2x2 card — its grid span is set inline (free placement). */
   .list-card.big {
-    grid-column: span 2;
-    grid-row: span 2;
     aspect-ratio: auto;
   }
 
@@ -362,6 +360,15 @@
   .list-grid.reordering {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Crect x='1.5' y='1.5' width='90' height='90' rx='7' fill='rgba(255,255,255,0.05)' stroke='rgba(255,255,255,0.3)' stroke-width='1.6'/%3E%3C/svg%3E");
     background-repeat: repeat;
+  }
+
+  /* Highlights the cell a dragged card will drop into. */
+  .drop-target {
+    border: 2.5px dashed color-mix(in srgb, var(--on-bg) 70%, transparent);
+    background: color-mix(in srgb, var(--on-bg) 12%, transparent);
+    border-radius: var(--radius);
+    pointer-events: none;
+    z-index: 2;
   }
 
   /* Task preview inside a 2x2 card */
@@ -1917,6 +1924,10 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.7.0', date: '2026-05-22', changes: [
+      'Drop list cards into any grid cell, gaps and all',
+      'Fixed a card stretching after you rotate your phone',
+    ]},
     { version: '1.6.1', date: '2026-05-21', changes: [
       'Sign in with Apple, or an email link — not just Google',
     ]},
@@ -2223,12 +2234,78 @@
   // --- Home view -----------------------------------------------------------
   const MENU_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2.3"/><circle cx="12" cy="12" r="2.3"/><circle cx="19" cy="12" r="2.3"/></svg>`;
 
+  // --- Free-grid placement -------------------------------------------------
+  // Each list keeps a cell {c,r} per column count (2 on phone, 4 on desktop),
+  // so an arrangement made on one device never disturbs the other.
+  function gridCols() {
+    return window.matchMedia('(min-width: 720px)').matches ? 4 : 2;
+  }
+  function listSize(list) { return list.size === 2 ? 2 : 1; }
+
+  function markCells(occ, cell, size, val) {
+    for (let dc = 0; dc < size; dc++)
+      for (let dr = 0; dr < size; dr++)
+        occ[(cell.c + dc) + ',' + (cell.r + dr)] = val;
+  }
+  function cellsFree(occ, c, r, size, cols) {
+    if (c < 0 || r < 0 || c + size > cols) return false;
+    for (let dc = 0; dc < size; dc++)
+      for (let dr = 0; dr < size; dr++)
+        if (occ[(c + dc) + ',' + (r + dr)]) return false;
+    return true;
+  }
+  function firstFreeCell(occ, size, cols) {
+    for (let r = 0; ; r++)
+      for (let c = 0; c < cols; c++)
+        if (cellsFree(occ, c, r, size, cols)) return { c, r };
+  }
+
+  // Occupancy map of every list except one (the one being dragged).
+  function gridOccupancy(cols, excludeId) {
+    const occ = {};
+    state.lists.forEach(l => {
+      if (l.id === excludeId || !l.pos || !l.pos[cols]) return;
+      markCells(occ, l.pos[cols], listSize(l), true);
+    });
+    return occ;
+  }
+
+  // Give every list a valid {c,r} for both grids. Good positions are kept;
+  // missing, off-grid, or overlapping ones get re-flowed into a free cell.
+  // Returns true if anything changed (so the caller can persist it).
+  function ensurePositions(st) {
+    let changed = false;
+    [2, 4].forEach(cols => {
+      const occ = {};
+      const needs = [];
+      st.lists.forEach(l => {
+        if (!l.pos) l.pos = {};
+        const p = l.pos[cols];
+        if (p && cellsFree(occ, p.c, p.r, listSize(l), cols)) {
+          markCells(occ, p, listSize(l), true);
+        } else {
+          needs.push(l);
+        }
+      });
+      needs.forEach(l => {
+        const cell = firstFreeCell(occ, listSize(l), cols);
+        l.pos[cols] = cell;
+        markCells(occ, cell, listSize(l), true);
+        changed = true;
+      });
+    });
+    return changed;
+  }
+
   function renderHome() {
     themeHome();
     const grid = document.getElementById('listGrid');
     const count = document.getElementById('listCount');
     count.textContent = state.lists.length + (state.lists.length === 1 ? ' list' : ' lists');
     grid.innerHTML = '';
+
+    if (ensurePositions(state)) saveState();
+    const cols = gridCols();
 
     state.lists.forEach(list => {
       const open = list.todos.length;
@@ -2261,6 +2338,10 @@
       const card = document.createElement('div');
       card.className = 'list-card' + (big ? ' big' : '');
       card.setAttribute('data-list-id', list.id);
+      const cell = list.pos[cols];
+      const span = big ? 2 : 1;
+      card.style.gridColumn = (cell.c + 1) + ' / span ' + span;
+      card.style.gridRow = (cell.r + 1) + ' / span ' + span;
       card.innerHTML = `
         <div class="card-inner">
           <div class="list-card-stripe" style="background:${listHex(list)}"></div>
@@ -2320,6 +2401,9 @@
     add.className = 'new-list-card';
     add.textContent = '+';
     add.addEventListener('click', () => openListModal(null));
+    const addCell = firstFreeCell(gridOccupancy(cols, null), 1, cols);
+    add.style.gridColumn = (addCell.c + 1);
+    add.style.gridRow = (addCell.r + 1);
     grid.appendChild(add);
     sizeGrid();
   }
@@ -2358,18 +2442,31 @@
     });
   }
 
+  // Set a card's grid span live, from its stored cell.
+  function setCardSpan(card, list, size) {
+    card.classList.toggle('big', size === 2);
+    const cols = gridCols();
+    const p = list.pos[cols];
+    card.style.gridColumn = (p.c + 1) + ' / span ' + size;
+    card.style.gridRow = (p.r + 1) + ' / span ' + size;
+  }
+
   function onResizeMove(e) {
     if (!resizeState) return;
-    const { card, cell } = resizeState;
+    const { list, card, cell } = resizeState;
     const reach = Math.max(e.clientX - resizeState.x0, e.clientY - resizeState.y0);
-    const isBig = card.classList.contains('big');
-    let want = isBig;
-    if (!isBig && reach > cell * 0.4) want = true;
-    if (isBig && reach < -cell * 0.4) want = false;
-    if (want !== isBig) {
-      // Toggle the span and let the other cards glide to their new spots.
-      flipMove(() => card.classList.toggle('big', want));
+    const cur = card.classList.contains('big') ? 2 : 1;
+    let want = cur;
+    if (cur === 1 && reach > cell * 0.4) want = 2;
+    if (cur === 2 && reach < -cell * 0.4) want = 1;
+    if (want === cur) return;
+    if (want === 2) {
+      // Only grow if the three extra cells are free and on-grid.
+      const cols = gridCols();
+      const p = list.pos[cols];
+      if (!cellsFree(gridOccupancy(cols, list.id), p.c, p.r, 2, cols)) return;
     }
+    setCardSpan(card, list, want);
   }
 
   function onResizeEnd() {
@@ -2383,11 +2480,11 @@
     document.removeEventListener('pointercancel', onResizeEnd);
     const finalSize = card.classList.contains('big') ? 2 : 1;
     resizeState = null;
-    if ((list.size || 1) !== finalSize) {
+    if (listSize(list) !== finalSize) {
       list.size = finalSize;
       saveState();
-      renderHome();   // rebuild so the card gains / loses its task preview
     }
+    renderHome();   // rebuild so the card gains / loses its task preview
   }
 
   // Re-square the grid after a viewport change. iOS reports a stale width
@@ -2470,70 +2567,75 @@
     card.classList.remove('pressing');
     card.classList.add('dragging');
     const rg = document.getElementById('listGrid');
+    const cell = parseFloat(rg.dataset.cell) || 160;
+    const gap = parseFloat(rg.dataset.gap) || 10;
     rg.classList.add('reordering');
-    rg.style.backgroundSize = ((parseFloat(rg.dataset.cell) || 160)
-      + (parseFloat(rg.dataset.gap) || 10)) + 'px ' + ((parseFloat(rg.dataset.cell) || 160)
-      + (parseFloat(rg.dataset.gap) || 10)) + 'px';
-    homeDrag = { id, source: card, clone, grabX: x - rect.left, grabY: y - rect.top,
-                 lastOver: null, cooldownUntil: 0 };
+    rg.style.backgroundSize = (cell + gap) + 'px ' + (cell + gap) + 'px';
+    // Grow the grid so a card can be dropped into the empty rows below.
+    const cols = gridCols();
+    let maxR = 1;
+    state.lists.forEach(l => {
+      const p = l.pos && l.pos[cols];
+      if (p) maxR = Math.max(maxR, p.r + listSize(l));
+    });
+    rg.style.minHeight = ((maxR + 2) * (cell + gap)) + 'px';
+    const drop = document.createElement('div');
+    drop.className = 'drop-target';
+    drop.style.display = 'none';
+    rg.appendChild(drop);
+    homeDrag = {
+      id, source: card, clone, drop,
+      grabX: x - rect.left, grabY: y - rect.top,
+      size: listSize(getList(id)), occ: gridOccupancy(cols, id),
+      target: null,
+    };
     moveHomeDrag(x, y);
   }
 
-  // Re-lay-out the grid with a FLIP animation so the cards visibly slide.
-  function flipMove(moveFn) {
-    const grid = document.getElementById('listGrid');
-    const cards = [...grid.querySelectorAll('.list-card')];
-    const first = cards.map(c => c.getBoundingClientRect());
-    moveFn();
-    cards.forEach((c, i) => {
-      const l = c.getBoundingClientRect();
-      const dx = first[i].left - l.left, dy = first[i].top - l.top;
-      c.style.transition = 'none';
-      c.style.transform = (dx || dy) ? 'translate(' + dx + 'px,' + dy + 'px)' : '';
-    });
-    requestAnimationFrame(() => {
-      cards.forEach(c => {
-        c.style.transition = 'transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)';
-        c.style.transform = '';
-      });
-    });
-  }
-
+  // Free placement: the card snaps to whichever grid cell it is dragged over.
   function moveHomeDrag(x, y) {
     if (!homeDrag) return;
     homeDrag.clone.style.transform =
       'translate(' + (x - homeDrag.grabX) + 'px,' + (y - homeDrag.grabY) + 'px) scale(1.05)';
-    if (Date.now() < homeDrag.cooldownUntil) return;
-    const under = document.elementFromPoint(x, y);
-    const overCard = under && under.closest('.list-card');
-    if (!overCard || overCard === homeDrag.source || overCard.classList.contains('lifted')) return;
-    if (overCard === homeDrag.lastOver) return;
-    homeDrag.lastOver = overCard;
-    homeDrag.cooldownUntil = Date.now() + 130;
-    flipMove(() => {
-      const grid = homeDrag.source.parentNode;
-      const cards = [...grid.querySelectorAll('.list-card')];
-      const srcIdx = cards.indexOf(homeDrag.source);
-      const tgtIdx = cards.indexOf(overCard);
-      if (srcIdx < tgtIdx) grid.insertBefore(homeDrag.source, overCard.nextSibling);
-      else grid.insertBefore(homeDrag.source, overCard);
-    });
+    const grid = document.getElementById('listGrid');
+    const gr = grid.getBoundingClientRect();
+    const cell = parseFloat(grid.dataset.cell) || 160;
+    const gap = parseFloat(grid.dataset.gap) || 10;
+    const cols = gridCols();
+    let c = Math.round((x - homeDrag.grabX - gr.left) / (cell + gap));
+    let r = Math.round((y - homeDrag.grabY - gr.top) / (cell + gap));
+    c = Math.max(0, Math.min(c, cols - homeDrag.size));
+    r = Math.max(0, r);
+    const ok = cellsFree(homeDrag.occ, c, r, homeDrag.size, cols);
+    homeDrag.target = ok ? { c, r } : null;
+    const drop = homeDrag.drop;
+    if (ok) {
+      drop.style.display = '';
+      drop.style.gridColumn = (c + 1) + ' / span ' + homeDrag.size;
+      drop.style.gridRow = (r + 1) + ' / span ' + homeDrag.size;
+    } else {
+      drop.style.display = 'none';
+    }
   }
 
   function endHomeDrag(commit) {
     if (!homeDrag) return;
-    const { clone } = homeDrag;
+    const { clone, drop, id, target } = homeDrag;
     homeDrag = null;
     detachHomeListeners();
     clone.remove();
+    if (drop) drop.remove();
     const grid = document.getElementById('listGrid');
     grid.classList.remove('reordering');
     grid.style.backgroundSize = '';
-    if (commit !== false) {
-      const order = [...grid.querySelectorAll('.list-card')]
-        .map(c => Number(c.getAttribute('data-list-id')));
-      state.lists.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
-      saveState();
+    grid.style.minHeight = '';
+    if (commit !== false && target) {
+      const list = getList(id);
+      if (list) {
+        if (!list.pos) list.pos = {};
+        list.pos[gridCols()] = { c: target.c, r: target.r };
+        saveState();
+      }
     }
     renderHome();
   }
