@@ -164,20 +164,23 @@
   /* Extra room at the bottom so cards never hide behind the pinned footer. */
   /* Generous bottom room so the lowest cards can scroll well up the screen. */
   #homeView .view-inner { padding-bottom: calc(45vh + env(safe-area-inset-bottom, 0px)); }
+  /* Clear the fixed app footer so the last tasks never hide behind it. */
+  #listView .view-inner { padding-bottom: calc(116px + env(safe-area-inset-bottom, 0px)); }
 
-  /* Settings gear + version, pinned to the bottom of the window on the home
-     screen. It sits inside #homeView so the list view slides cleanly over it. */
-  .home-footer {
+  /* App footer — undo / settings / redo + version, pinned to the bottom of
+     the window. Body-level and above the list view, so the control panel
+     stays put on every page. */
+  .app-footer {
     position: fixed;
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 2;
+    z-index: 10;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 9px;
-    padding: 12px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+    gap: 7px;
+    padding: 8px 16px calc(7px + env(safe-area-inset-bottom, 0px));
     pointer-events: none;
   }
 
@@ -587,33 +590,32 @@
   .task-menu-item.danger:hover { background: var(--red-soft); }
   .task-menu-item svg { flex-shrink: 0; }
 
-  /* Undo / redo buttons — a keyboard-free way to step back */
-  .history-controls {
-    position: fixed;
-    left: calc(14px + env(safe-area-inset-left, 0px));
-    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-    z-index: 60;
+  /* Footer control panel — undo, settings gear, redo in a row */
+  .footer-controls {
     display: flex;
-    gap: 8px;
+    align-items: center;
+    gap: 10px;
   }
 
-  .history-btn {
-    width: 46px;
-    height: 46px;
-    border: none;
-    border-radius: 50%;
-    background: var(--surface);
-    color: var(--accent);
-    box-shadow: 0 4px 16px rgba(0,0,0,0.28);
-    cursor: pointer;
+  .footer-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: transform 0.1s;
+    pointer-events: auto;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: none;
+    background: color-mix(in srgb, var(--on-bg) 14%, transparent);
+    color: var(--on-bg);
+    cursor: pointer;
+    transition: background 0.15s, opacity 0.2s, transform 0.12s;
   }
 
-  .history-btn:active { transform: scale(0.88); }
-  .history-btn[hidden] { display: none; }
+  .footer-btn:hover { background: color-mix(in srgb, var(--on-bg) 24%, transparent); }
+  .footer-btn:active { transform: scale(0.9); }
+  /* Ghosted out until there is something to undo / redo */
+  .footer-btn.ghosted { opacity: 0.3; pointer-events: none; }
 
   .list-card-counts {
     font-size: 0.72rem;
@@ -1831,12 +1833,7 @@
   </div>
   <div class="list-grid" id="listGrid"></div>
   </div>
-  <div class="home-footer">
-  <button class="settings-btn" id="settingsBtn" onclick="openSettings()" title="Settings" aria-label="Settings">
-    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-  </button>
-  <div class="version-footer" id="versionFooter" onclick="openChangelog()" title="View changelog"></div>
-</div></div>
+</div>
 
 <!-- LIST VIEW -->
 <div class="view" id="listView"><div class="view-inner">
@@ -1864,6 +1861,22 @@
     <div id="completedClip"><div id="completedList" class="done-list"></div></div>
   </div>
 </div></div>
+
+<!-- APP FOOTER — undo / settings / redo, on every view -->
+<div class="app-footer">
+  <div class="footer-controls">
+    <button class="footer-btn" id="undoBtn" onclick="undo()" title="Undo" aria-label="Undo">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12H8"/></svg>
+    </button>
+    <button class="settings-btn" id="settingsBtn" onclick="openSettings()" title="Settings" aria-label="Settings">
+      <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+    <button class="footer-btn" id="redoBtn" onclick="redo()" title="Redo" aria-label="Redo">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h6"/></svg>
+    </button>
+  </div>
+  <div class="version-footer" id="versionFooter" onclick="openChangelog()" title="View changelog"></div>
+</div>
 
 <!-- CHANGELOG MODAL -->
 <div class="overlay" id="changelogOverlay">
@@ -2031,16 +2044,6 @@
   </button>
 </div>
 
-<!-- UNDO / REDO BUTTONS (keyboard-free) -->
-<div class="history-controls" id="historyControls">
-  <button class="history-btn" id="undoBtn" title="Undo" aria-label="Undo" hidden>
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12H8"/></svg>
-  </button>
-  <button class="history-btn" id="redoBtn" title="Redo" aria-label="Redo" hidden>
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h6"/></svg>
-  </button>
-</div>
-
 <script>
   const STORAGE_KEY = 'checklist_data';
   // The browser's own lists. Written ONLY while signed out, so it can never
@@ -2079,6 +2082,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.11.2', date: '2026-05-22', changes: [
+      'Undo and redo sit in the footer beside the gear, on every page',
+    ]},
     { version: '1.11.1', date: '2026-05-22', changes: [
       'Undo and redo buttons, so it works without a keyboard',
     ]},
@@ -2297,13 +2303,13 @@
     updateHistoryButtons();
   }
 
-  // Show the undo / redo buttons only when there is somewhere to go.
+  // Ghost the undo / redo buttons when there is nowhere to go.
   function updateHistoryButtons() {
     const u = document.getElementById('undoBtn');
     const r = document.getElementById('redoBtn');
     if (!u || !r) return;
-    u.hidden = historyIndex <= 0;
-    r.hidden = historyIndex >= history.length - 1;
+    u.classList.toggle('ghosted', historyIndex <= 0);
+    r.classList.toggle('ghosted', historyIndex >= history.length - 1);
   }
 
   // Record a snapshot after a change. A rapid burst (e.g. dragging a colour
@@ -2425,6 +2431,7 @@
       lv.style.setProperty('--border', color);
       lv.style.setProperty('--border-light', color + '33');
       lv.style.setProperty('--on-bg', '#efe9e2');
+      document.documentElement.style.setProperty('--on-bg', '#efe9e2');
       return;
     }
     const light = isLight(color);
@@ -2437,6 +2444,7 @@
     lv.style.setProperty('--border', ink);
     lv.style.setProperty('--border-light', ink + '30');
     lv.style.setProperty('--on-bg', light ? '#2a2118' : '#fff');
+    document.documentElement.style.setProperty('--on-bg', light ? '#2a2118' : '#fff');
   }
 
   // Theme the home view to the blend of all list colors.
@@ -2444,9 +2452,10 @@
     const first = state.lists[0];
     document.documentElement.style.setProperty('--app-bg',
       state.dark ? DARK_BG : homeGradient());
-    document.getElementById('homeView').style.setProperty('--on-bg',
-      state.dark ? '#efe9e2'
-        : (first && isLight(listHex(first)) ? '#2a2118' : '#fff'));
+    const homeInk = state.dark ? '#efe9e2'
+      : (first && isLight(listHex(first)) ? '#2a2118' : '#fff');
+    document.getElementById('homeView').style.setProperty('--on-bg', homeInk);
+    document.documentElement.style.setProperty('--on-bg', homeInk);
   }
 
   // Home backdrop: a soft gradient of the lists' own colors. The body slowly
