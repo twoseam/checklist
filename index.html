@@ -266,11 +266,8 @@
     gap: 10px;
   }
 
-  /* Desktop: a roomier page, 4 cards per row. */
-  @media (min-width: 720px) {
-    #homeView .view-inner { max-width: 900px; }
-    .list-grid { grid-template-columns: repeat(4, 1fr); gap: 14px; }
-  }
+  /* One shared 2-column layout on every device, so an arrangement made
+     anywhere looks the same everywhere. */
 
   .list-card {
     background: var(--surface);
@@ -1924,6 +1921,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.7.1', date: '2026-05-22', changes: [
+      'Fixed scrolling in the Mac app',
+    ]},
     { version: '1.7.0', date: '2026-05-22', changes: [
       'Drop list cards into any grid cell, gaps and all',
       'Fixed a card stretching after you rotate your phone',
@@ -2237,9 +2237,8 @@
   // --- Free-grid placement -------------------------------------------------
   // Each list keeps a cell {c,r} per column count (2 on phone, 4 on desktop),
   // so an arrangement made on one device never disturbs the other.
-  function gridCols() {
-    return window.matchMedia('(min-width: 720px)').matches ? 4 : 2;
-  }
+  // One shared layout everywhere — always 2 columns.
+  function gridCols() { return 2; }
   function listSize(list) { return list.size === 2 ? 2 : 1; }
 
   function markCells(occ, cell, size, val) {
@@ -2275,7 +2274,7 @@
   // Returns true if anything changed (so the caller can persist it).
   function ensurePositions(st) {
     let changed = false;
-    [2, 4].forEach(cols => {
+    [gridCols()].forEach(cols => {
       const occ = {};
       const needs = [];
       st.lists.forEach(l => {
@@ -2413,7 +2412,7 @@
   function sizeGrid() {
     const grid = document.getElementById('listGrid');
     if (!grid || !grid.clientWidth) return;
-    const cols = window.matchMedia('(min-width: 720px)').matches ? 4 : 2;
+    const cols = gridCols();
     const gap = parseFloat(getComputedStyle(grid).columnGap) || 10;
     const cell = (grid.clientWidth - gap * (cols - 1)) / cols;
     if (cell > 0) {
@@ -3607,9 +3606,16 @@
     lv.addEventListener('touchcancel', endSwipe);
   })();
 
-  // Pin views to the real screen height (iOS standalone miscomputes 100%).
+  // Pin views to the window height. iOS standalone miscomputes the height
+  // around the home-indicator strip, so there — and only there — pad up to
+  // the device screen height. On macOS/desktop, screen.height is the whole
+  // monitor, which would force the view taller than the window and kill
+  // scrolling, so the pad must stay iOS-only.
   function setAppHeight() {
-    const h = Math.max(window.innerHeight, window.screen.height || 0);
+    let h = window.innerHeight;
+    if (window.navigator.standalone === true) {
+      h = Math.max(h, window.screen.height || 0);
+    }
     document.documentElement.style.setProperty('--app-h', h + 'px');
   }
   setAppHeight();
