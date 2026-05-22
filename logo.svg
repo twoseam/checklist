@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 656 200" fill="none">
   <!--
-    JotLists wordmark — DRAFT.
+    JotList wordmark — DRAFT.
     Letters use Poppins (clean geometric) as a stand-in until the real
     reference font arrives; then convert the wordmark to outlined <path>s
     so it needs no font. The "o" is the brand check-circle, positioned
@@ -29,6 +29,6 @@
   <path d="M142 100 L157 114 L186 79" fill="none" stroke="#ffffff"
         stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
 
-  <!-- "tLists" -->
-  <text class="wm" x="210" y="143" fill="url(#jl-red)" letter-spacing="-7">tLists</text>
+  <!-- "tList" -->
+  <text class="wm" x="210" y="143" fill="url(#jl-red)" letter-spacing="-7">tList</text>
 </svg>

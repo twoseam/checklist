@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-title" content="JotList">
 <meta name="theme-color" content="#c0392b">
 <meta name="description" content="A fast checklist app — no login, no nonsense. Your lists, right in your browser.">
-<meta property="og:title" content="JotLists">
+<meta property="og:title" content="JotList">
 <meta property="og:description" content="A fast checklist app — no login, no nonsense.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://jotlist.io">
@@ -180,7 +180,9 @@
     flex-direction: column;
     align-items: center;
     gap: 7px;
-    padding: 8px 16px calc(7px + env(safe-area-inset-bottom, 0px));
+    /* Sit close to the bottom edge — only a slim buffer above the iOS home
+       indicator, so the control panel rides low, especially in the app. */
+    padding: 8px 16px calc(2px + env(safe-area-inset-bottom, 0px) * 0.5);
     pointer-events: none;
   }
 
@@ -192,7 +194,7 @@
     margin-bottom: 24px;
   }
 
-  /* Site logo — the JotLists wordmark, monochrome so it always has
+  /* Site logo — the JotList wordmark, monochrome so it always has
      contrast on the coloured / charcoal background. */
   .logo {
     height: 34px;
@@ -285,6 +287,9 @@
     display: flex;
     flex-direction: column;
     aspect-ratio: 1 / 1;
+    /* Let the card be sized by its grid area, not its content — so a 2x2
+       card stays a fixed 2x2 and its task list clips instead of stretching. */
+    min-height: 0;
     transition: transform 0.12s, box-shadow 0.12s, opacity 0.15s;
   }
 
@@ -400,6 +405,39 @@
 
   /* Add-a-task row pinned to the bottom of a 2x2 card */
   .card-add { flex-shrink: 0; }
+
+  /* The "+ Add a task" affordance at the end of a 2x2 card's list. Tapping
+     it swaps in the text field below. */
+  .card-add-row {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: var(--surface-alt);
+    border: 1.5px dashed var(--border-light, color-mix(in srgb, var(--text-dim) 50%, transparent));
+    border-radius: var(--radius-xs);
+    padding: 6px 8px;
+    cursor: pointer;
+    transition: color 0.12s, border-color 0.12s;
+  }
+
+  .card-add-row:hover { color: var(--accent); border-color: var(--accent); }
+  .card-add-row svg { flex-shrink: 0; }
+
+  /* "+N more" line — shown on a 2x2 card when its tasks overflow. */
+  .card-preview-more {
+    flex-shrink: 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--accent);
+    cursor: pointer;
+    padding: 1px 0 2px;
+  }
 
   .card-add-input {
     width: 100%;
@@ -604,10 +642,14 @@
     backdrop-filter: blur(14px) saturate(1.6);
     -webkit-backdrop-filter: blur(14px) saturate(1.6);
     box-shadow: 0 3px 14px rgba(0,0,0,0.18);
-    color: var(--on-bg);
+    color: var(--brand-2);
     cursor: pointer;
     transition: background 0.15s, opacity 0.2s, transform 0.12s;
   }
+
+  /* Dark mode: a dark brand colour would vanish on charcoal — keep it light. */
+  html.dark .footer-btn,
+  html.dark .settings-btn { color: var(--on-bg); }
 
   .footer-btn:hover { background: color-mix(in srgb, var(--on-bg) 22%, transparent); }
   .footer-btn:active { transform: scale(0.9); }
@@ -730,6 +772,36 @@
   }
 
   .add-btn:hover { background: var(--accent-hover); }
+
+  /* Utility toolbar — copy / paste a list */
+  .list-tools {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .tool-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: inherit;
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--brand-2);
+    background: var(--surface);
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 8px 13px;
+    cursor: pointer;
+    transition: transform 0.1s, filter 0.12s;
+  }
+
+  html.dark .tool-btn { color: var(--text); }
+  .tool-btn:hover { filter: brightness(0.96); }
+  .tool-btn:active { transform: scale(0.95); }
+  .tool-btn svg { flex-shrink: 0; }
 
   /* Task list */
   .task-list {
@@ -884,7 +956,7 @@
     transition: opacity 0.12s;
   }
 
-  /* Task text */
+  /* Task text — click / tap it to edit, so it gets a text cursor. */
   .task-text {
     font-size: 0.88rem;
     flex: 1;
@@ -892,6 +964,7 @@
     overflow-wrap: anywhere;
     color: var(--text);
     font-weight: 400;
+    cursor: text;
   }
 
   /* Delete */
@@ -1162,7 +1235,7 @@
     backdrop-filter: blur(14px) saturate(1.6);
     -webkit-backdrop-filter: blur(14px) saturate(1.6);
     box-shadow: 0 3px 14px rgba(0,0,0,0.18);
-    color: var(--on-bg);
+    color: var(--brand-2);
     cursor: pointer;
     transition: background 0.15s, transform 0.25s ease;
   }
@@ -1651,6 +1724,96 @@
 
   .overlay.open .modal { transform: translateY(0) scale(1); }
 
+  /* Settings drawer — a full-height panel sliding in from the right, in
+     place of a centred pop-up, for a roomier and calmer layout. */
+  .modal.settings-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    height: var(--app-h, 100%);
+    max-height: none;
+    width: min(400px, 100%);
+    max-width: none;
+    border-radius: 0;
+    padding:
+      max(24px, calc(env(safe-area-inset-top, 0px) + 16px))
+      24px
+      calc(28px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(100%);
+    transition: transform 0.34s cubic-bezier(0.32, 0.72, 0, 1);
+    box-shadow: -12px 0 36px rgba(0,0,0,0.28);
+  }
+
+  .overlay.open .modal.settings-drawer { transform: translateX(0); }
+
+  .settings-drawer .modal-title { font-size: 1.3rem; }
+
+  /* Feature-request confirmation panel */
+  .feedback-success {
+    display: none;
+    text-align: center;
+    padding: 16px 0 8px;
+  }
+
+  .feedback-success.show { display: block; }
+
+  .feedback-success-icon {
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    background: var(--green-soft);
+    color: var(--green);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 14px;
+  }
+
+  .feedback-success-title {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .feedback-success-text {
+    font-size: 0.86rem;
+    color: var(--text-secondary);
+    line-height: 1.45;
+  }
+
+  /* Usage stats — owner-only block in the settings drawer */
+  .stats-grid {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .stats-cell {
+    flex: 1;
+    background: var(--surface-alt);
+    border-radius: var(--radius-sm);
+    padding: 14px 12px;
+    text-align: center;
+  }
+
+  .stats-num {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+  }
+
+  .stats-label {
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    margin-top: 4px;
+  }
+
   .modal-header {
     display: flex;
     align-items: baseline;
@@ -1817,7 +1980,7 @@
 <!-- HOME VIEW -->
 <div class="view" id="homeView"><div class="view-inner">
   <div class="header">
-    <svg class="logo" viewBox="0 0 610 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="JotLists">
+    <svg class="logo" viewBox="0 0 610 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="JotList">
       <defs>
         <mask id="logoCheck">
           <rect x="-200" y="-200" width="1010" height="600" fill="#fff"/>
@@ -1828,7 +1991,7 @@
       <g fill="currentColor" mask="url(#logoCheck)">
         <text class="logo-wm" x="120" y="143" text-anchor="end">J</text>
         <circle cx="163" cy="98" r="46"/>
-        <text class="logo-wm" x="210" y="143" letter-spacing="-7">tLists</text>
+        <text class="logo-wm" x="210" y="143" letter-spacing="-7">tList</text>
       </g>
     </svg>
     <div class="header-right">
@@ -1853,13 +2016,24 @@
     <button class="add-btn" onclick="addTask()">Add</button>
   </div>
 
+  <div class="list-tools">
+    <button class="tool-btn" id="copyBtn" onclick="copyList()" title="Copy this list (⌘C)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      <span>Copy</span>
+    </button>
+    <button class="tool-btn" id="pasteBtn" onclick="pasteList()" title="Paste tasks (⌘V)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
+      <span>Paste</span>
+    </button>
+  </div>
+
   <div class="task-list" id="todoList"></div>
   <div class="empty-state" id="emptyState">No tasks yet</div>
 
   <div class="history-section" id="historySection" style="display:none;">
     <div class="history-header" onclick="toggleHistory()">
       <span class="history-chevron" id="historyChevron">▶</span>
-      <span class="history-title">History</span>
+      <span class="history-title">Completed</span>
       <span class="history-count" id="historyCount"></span>
       <button class="clear-all-btn" onclick="event.stopPropagation();clearAllHistory()">Clear All</button>
     </div>
@@ -1894,9 +2068,9 @@
   </div>
 </div>
 
-<!-- SETTINGS MODAL -->
+<!-- SETTINGS DRAWER -->
 <div class="overlay" id="settingsOverlay">
-  <div class="modal">
+  <div class="modal settings-drawer">
     <div class="modal-header">
       <span class="modal-title">Settings</span>
       <button class="modal-close" onclick="closeSettings()" title="Close">×</button>
@@ -1918,8 +2092,9 @@
       <button class="palette-btn" onclick="resetPalette()">Set to Default</button>
       <button class="palette-btn" onclick="regeneratePalette()">Generate New</button>
     </div>
-    <button class="palette-btn settings-apply" onclick="openFeedback()">Submit feedback</button>
-    <button class="palette-btn primary settings-apply" onclick="closeSettings()">Apply</button>
+    <div id="statsBox"></div>
+    <button class="palette-btn settings-apply" onclick="openFeedback()">Request a feature</button>
+    <button class="palette-btn primary settings-apply" onclick="closeSettings()">Done</button>
   </div>
 </div>
 
@@ -1984,17 +2159,27 @@
   </div>
 </div>
 
-<!-- FEEDBACK -->
+<!-- REQUEST A FEATURE -->
 <div class="overlay" id="feedbackOverlay">
   <div class="modal">
     <div class="modal-header">
-      <span class="modal-title">Send feedback</span>
+      <span class="modal-title">Request a feature</span>
       <button class="modal-close" onclick="closeFeedback()" title="Close">×</button>
     </div>
-    <p class="feedback-intro">Found a bug or have an idea? It goes straight to the team.</p>
-    <textarea id="feedbackText" class="feedback-text" placeholder="What's on your mind?"></textarea>
-    <input type="email" id="feedbackEmail" class="feedback-email" placeholder="Your email (optional, for a reply)">
-    <button class="palette-btn primary settings-apply" onclick="sendFeedback()">Send</button>
+    <div id="feedbackForm">
+      <p class="feedback-intro">Got an idea for JotList? Tell us what you'd love to see.</p>
+      <textarea id="feedbackText" class="feedback-text" placeholder="What would you like JotList to do?"></textarea>
+      <input type="email" id="feedbackEmail" class="feedback-email" placeholder="Your email (optional, for a reply)">
+      <button class="palette-btn primary settings-apply" id="feedbackSend" onclick="sendFeedback()">Send request</button>
+    </div>
+    <div id="feedbackSuccess" class="feedback-success">
+      <div class="feedback-success-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="4,12.5 9.5,18 20,6.5"/></svg>
+      </div>
+      <div class="feedback-success-title">Request sent</div>
+      <p class="feedback-success-text">Thanks — your idea is on its way to the team.</p>
+      <button class="palette-btn primary settings-apply" onclick="closeFeedback()">Close</button>
+    </div>
   </div>
 </div>
 
@@ -2038,18 +2223,6 @@
   </button>
   <button class="card-menu-item danger" data-act="del" title="Delete list" aria-label="Delete list">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
-  </button>
-</div>
-
-<!-- TASK EDIT / DELETE MENU -->
-<div class="task-menu" id="taskMenu">
-  <button class="task-menu-item" data-act="edit">
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4.5L20 8.5 15.5 4 4 15.5V20z"/><path d="M13.5 6l4.5 4.5"/></svg>
-    Edit
-  </button>
-  <button class="task-menu-item danger" data-act="del">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
-    Delete
   </button>
 </div>
 
@@ -2101,6 +2274,16 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.14.0', date: '2026-05-22', changes: [
+      'Tap a task to edit it — the three-dot menu is gone',
+      'Copy a list or paste tasks in, with ⌘C and ⌘V',
+      '2×2 cards show more tasks, with a "+N more" that opens the list',
+      'Add a task from a 2×2 card with the + row',
+      'Settings is now a full-height drawer',
+      'Request a feature straight from Settings',
+      'New lists are named List 1, List 2…',
+      '"History" is now "Completed"',
+    ]},
     { version: '1.13.6', date: '2026-05-22', changes: [
       'Task drag-reorder now works the same with a mouse as on touch',
       'Smoother slide as rows move aside; dropped the tilt',
@@ -2315,13 +2498,13 @@
     } else if (raw && Array.isArray(raw.todos)) {
       // Migrate the old single-list format into the first list.
       st = { lists: [{
-        id: uid(), name: 'JotList', color: 0,
+        id: uid(), name: 'List 1', color: 0,
         todos: raw.todos || [], completed: raw.completed || [], batches: raw.batches || [],
       }] };
     } else {
       st = { lists: [
-        newList('JotList 1', 0, DEFAULT_TODOS),
-        newList('JotList 2', 1, DEFAULT_TODOS),
+        newList('List 1', 0, DEFAULT_TODOS),
+        newList('List 2', 1, DEFAULT_TODOS),
       ] };
     }
 
@@ -2611,15 +2794,17 @@
       const big = list.size === 2;
       let previewHtml = '';
       if (big) {
-        const items = list.todos.slice(0, 6).map(t =>
+        const items = list.todos.map(t =>
           `<div class="card-preview-item" data-task="${t.id}">`
           + `<span class="card-preview-box"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6 5,9 10,3"/></svg></span>`
           + `<span class="card-preview-text">${esc(t.text)}</span></div>`).join('');
         previewHtml = `<div class="card-preview">`
           + `<div class="card-preview-list">${items
             || '<div class="card-preview-empty">No tasks yet</div>'}</div>`
-          + `<div class="card-add"><input class="card-add-input" type="text" `
-          + `placeholder="Add task" maxlength="200"></div>`
+          + `<div class="card-preview-more" style="display:none"></div>`
+          + `<button class="card-add-row" type="button">`
+          +   `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`
+          +   `<span>Add a task</span></button>`
           + `</div>`;
       }
 
@@ -2667,22 +2852,21 @@
         });
       });
 
-      // Add a task straight from a 2x2 card.
-      const cardAdd = card.querySelector('.card-add-input');
-      if (cardAdd) {
-        cardAdd.addEventListener('keydown', e => {
-          if (e.key !== 'Enter') return;
-          e.preventDefault();
-          const text = cardAdd.value.trim();
-          if (!text) return;
-          const t = { id: uid(), text };
-          if (state.newTaskTop) list.todos.unshift(t);
-          else list.todos.push(t);
-          saveState();
-          renderHome();
-          const next = document.querySelector(
-            '.list-card[data-list-id="' + list.id + '"] .card-add-input');
-          if (next) next.focus();
+      // Tap the "+ Add a task" row to drop in the text field.
+      const addRow = card.querySelector('.card-add-row');
+      if (addRow) {
+        addRow.addEventListener('click', e => {
+          e.stopPropagation();
+          openCardAdd(card, list);
+        });
+      }
+
+      // "+N more" — tap it to open the full list.
+      const moreEl = card.querySelector('.card-preview-more');
+      if (moreEl) {
+        moreEl.addEventListener('click', e => {
+          e.stopPropagation();
+          openList(list.id);
         });
       }
 
@@ -2690,14 +2874,16 @@
       card.addEventListener('touchstart', e => {
         if (e.touches.length !== 1 || e.target.closest('.card-icon-btn')
             || e.target.closest('.card-resize') || e.target.closest('.card-preview-box')
-            || e.target.closest('.card-add')) return;
+            || e.target.closest('.card-add-row') || e.target.closest('.card-add-input')
+            || e.target.closest('.card-preview-more')) return;
         lastHomeTouch = Date.now();
         homePressStart(list.id, card, e.touches[0].clientX, e.touches[0].clientY);
       }, { passive: true });
       card.addEventListener('mousedown', e => {
         if (e.button !== 0 || e.target.closest('.card-icon-btn')
             || e.target.closest('.card-resize') || e.target.closest('.card-preview-box')
-            || e.target.closest('.card-add')) return;
+            || e.target.closest('.card-add-row') || e.target.closest('.card-add-input')
+            || e.target.closest('.card-preview-more')) return;
         if (Date.now() - lastHomeTouch < 800) return;
         homePressStart(list.id, card, e.clientX, e.clientY);
       });
@@ -2711,6 +2897,79 @@
     add.addEventListener('click', () => openListModal(null));
     grid.appendChild(add);
     sizeGrid();
+    trimBigPreviews();
+  }
+
+  // Tap the "+ Add a task" row on a 2x2 card — swap it for a text field.
+  function openCardAdd(card, list) {
+    const row = card.querySelector('.card-add-row');
+    if (!row) return;
+    const inp = document.createElement('input');
+    inp.className = 'card-add-input';
+    inp.type = 'text';
+    inp.placeholder = 'Add a task';
+    inp.maxLength = 200;
+    row.replaceWith(inp);
+    inp.focus();
+    let done = false;
+    const addOne = () => {
+      const text = inp.value.trim();
+      if (!text) return false;
+      const t = { id: uid(), text };
+      if (state.newTaskTop) list.todos.unshift(t);
+      else list.todos.push(t);
+      saveState();
+      return true;
+    };
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (!addOne()) return;
+        done = true;
+        renderHome();
+        // Re-open the field so several tasks can be added in a row.
+        const next = document.querySelector('.list-card[data-list-id="' + list.id + '"]');
+        if (next) openCardAdd(next, list);
+      } else if (e.key === 'Escape') {
+        done = true;
+        renderHome();
+      }
+    });
+    inp.addEventListener('blur', () => {
+      if (done) return;
+      done = true;
+      addOne();
+      renderHome();
+    });
+  }
+
+  // 2x2 cards render every task, then this trims the ones that overflow and
+  // shows a "+N more" line in their place — tapping it opens the full list.
+  function trimBigPreviews() {
+    document.querySelectorAll('.list-card.big').forEach(card => {
+      const listEl = card.querySelector('.card-preview-list');
+      const more = card.querySelector('.card-preview-more');
+      if (!listEl || !more) return;
+      const items = [...listEl.querySelectorAll('.card-preview-item')];
+      items.forEach(it => { it.style.display = ''; });
+      if (!items.length) { more.style.display = 'none'; return; }
+      // Do all the tasks fit with no indicator?
+      more.style.display = 'none';
+      const last = items[items.length - 1].getBoundingClientRect();
+      if (last.bottom <= listEl.getBoundingClientRect().bottom + 0.5) return;
+      // They overflow — show the indicator (which shrinks the list), then
+      // count how many tasks still fit and hide the rest.
+      more.style.display = 'block';
+      const limit = listEl.getBoundingClientRect().bottom + 0.5;
+      let shown = 0;
+      for (const it of items) {
+        if (it.getBoundingClientRect().bottom <= limit) shown++;
+        else break;
+      }
+      if (shown < 1) shown = 1;
+      items.forEach((it, i) => { it.style.display = i < shown ? '' : 'none'; });
+      more.textContent = '+' + (items.length - shown) + ' more';
+    });
   }
 
   // --- Resizable cards -----------------------------------------------------
@@ -2784,8 +3043,9 @@
   function reflowGrid() {
     if (activeListId) return;
     sizeGrid();
-    requestAnimationFrame(sizeGrid);
-    setTimeout(sizeGrid, 300);
+    trimBigPreviews();
+    requestAnimationFrame(() => { sizeGrid(); trimBigPreviews(); });
+    setTimeout(() => { sizeGrid(); trimBigPreviews(); }, 300);
   }
   window.addEventListener('resize', reflowGrid);
   window.addEventListener('orientationchange', reflowGrid);
@@ -3024,7 +3284,7 @@
       onConfirm: () => {
         state.lists = state.lists.filter(l => l.id !== id);
         if (state.lists.length === 0) {
-          state.lists.push(newList('JotList', 0, []));
+          state.lists.push(newList('List 1', 0, []));
         }
         saveState();
         renderHome();
@@ -3074,8 +3334,18 @@
     document.getElementById('listModalOverlay').classList.remove('open');
   }
 
+  // The next free "List N" name, for a list created without a name.
+  function nextListName() {
+    let max = 0;
+    state.lists.forEach(l => {
+      const m = /^List (\d+)$/.exec(l.name || '');
+      if (m) max = Math.max(max, +m[1]);
+    });
+    return 'List ' + (max + 1);
+  }
+
   function saveListModal() {
-    const name = document.getElementById('listNameField').value.trim() || 'Untitled list';
+    const name = document.getElementById('listNameField').value.trim() || nextListName();
     if (editingListId) {
       const list = getList(editingListId);
       if (list) { list.name = name; list.color = pickedColor; }
@@ -3111,6 +3381,68 @@
     const items = document.getElementById('todoList').children;
     const fresh = state.newTaskTop ? items[0] : items[items.length - 1];
     if (fresh) fresh.classList.add('adding');
+  }
+
+  // --- Copy / paste a list -------------------------------------------------
+  // Copy turns the open tasks into a plain bullet list; paste turns bullet
+  // (or plain) lines from the clipboard back into tasks.
+  function listToBullets(list) {
+    return (list.todos || []).map(t => '• ' + t.text).join('\n');
+  }
+
+  // Briefly swap a tool button's label to confirm what happened.
+  function flashTool(id, label) {
+    const btn = document.getElementById(id);
+    const span = btn && btn.querySelector('span');
+    if (!span) return;
+    if (!span.dataset.label) span.dataset.label = span.textContent;
+    span.textContent = label;
+    clearTimeout(btn._flashTimer);
+    btn._flashTimer = setTimeout(() => { span.textContent = span.dataset.label; }, 1100);
+  }
+
+  function copyList() {
+    const list = activeList();
+    if (!list) return;
+    if (!list.todos.length) { flashTool('copyBtn', 'Empty'); return; }
+    const text = listToBullets(list);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text)
+        .then(() => flashTool('copyBtn', 'Copied'))
+        .catch(() => flashTool('copyBtn', 'Failed'));
+    } else {
+      flashTool('copyBtn', 'Failed');
+    }
+  }
+
+  // Each non-empty line becomes a task; a leading bullet / dash is stripped.
+  function addTasksFromText(text) {
+    const list = activeList();
+    if (!list || !text) return 0;
+    const lines = text.split(/\r?\n/)
+      .map(l => l.replace(/^\s*[-*•·]\s*/, '').trim())
+      .filter(Boolean);
+    if (!lines.length) return 0;
+    const tasks = lines.map(t => ({ id: uid(), text: t.slice(0, 200) }));
+    if (state.newTaskTop) list.todos.unshift.apply(list.todos, tasks);
+    else list.todos.push.apply(list.todos, tasks);
+    saveState();
+    render();
+    return tasks.length;
+  }
+
+  function pasteList() {
+    if (!activeList()) return;
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      navigator.clipboard.readText()
+        .then(txt => {
+          const n = addTasksFromText(txt);
+          flashTool('pasteBtn', n ? ('Added ' + n) : 'Nothing');
+        })
+        .catch(() => flashTool('pasteBtn', 'Failed'));
+    } else {
+      flashTool('pasteBtn', 'Failed');
+    }
   }
 
   // Slide a row off-screen, collapse its height, then run the data change.
@@ -3230,25 +3562,6 @@
     cardMenuListId = null;
   }
 
-  // --- Task ⋯ / right-click menu -------------------------------------------
-  let taskMenuId = null;
-
-  function openTaskMenu(taskId, x, y) {
-    taskMenuId = taskId;
-    const menu = document.getElementById('taskMenu');
-    menu.classList.add('open');
-    const w = menu.offsetWidth, h = menu.offsetHeight;
-    const left = Math.max(8, Math.min(x, window.innerWidth - 8 - w));
-    const top = Math.max(8, Math.min(y, window.innerHeight - 8 - h));
-    menu.style.left = left + 'px';
-    menu.style.top = top + 'px';
-  }
-
-  function closeTaskMenu() {
-    document.getElementById('taskMenu').classList.remove('open');
-    taskMenuId = null;
-  }
-
   // Inline-edit a task: its text becomes a field. Enter saves, Esc cancels.
   function startEditTask(id) {
     const row = document.querySelector('.task-item[data-id="' + id + '"]');
@@ -3309,7 +3622,6 @@
           </svg>
         </div>
         <span class="task-text">${esc(task.text)}</span>
-        <button class="task-menu-btn" title="Edit or delete" aria-label="Task options">${MENU_ICON}</button>
       </div>
     `;
 
@@ -3317,15 +3629,10 @@
       e.stopPropagation();
       completeTask(task.id);
     });
-    div.querySelector('.task-menu-btn').addEventListener('click', e => {
+    // Click / tap the text to edit it inline.
+    div.querySelector('.task-text').addEventListener('click', e => {
       e.stopPropagation();
-      const r = e.currentTarget.getBoundingClientRect();
-      openTaskMenu(task.id, r.right, r.bottom + 4);
-    });
-    // Right-click anywhere on the row opens the same menu.
-    div.addEventListener('contextmenu', e => {
-      e.preventDefault();
-      openTaskMenu(task.id, e.clientX, e.clientY);
+      startEditTask(task.id);
     });
 
     attachTaskSwipe(div, task.id);
@@ -3441,6 +3748,8 @@
 
     div.addEventListener('touchstart', e => {
       if (e.touches.length !== 1) { track = false; clearHold(); return; }
+      // While editing, leave the field alone so its text stays selectable.
+      if (e.target.closest('.task-edit-input')) { track = false; return; }
       lastTaskTouch = Date.now();
       x0 = e.touches[0].clientX;
       y0 = e.touches[0].clientY;
@@ -3520,7 +3829,9 @@
     }
     div.addEventListener('mousedown', e => {
       if (e.button !== 0) return;
-      if (e.target.closest('.checkbox') || e.target.closest('.task-menu-btn')) return;
+      // Don't start a drag from the checkbox or the inline edit field —
+      // the field needs free clicks + text selection.
+      if (e.target.closest('.checkbox') || e.target.closest('.task-edit-input')) return;
       if (Date.now() - lastTaskTouch < 800) return;   // ignore touch-synth clicks
       x0 = e.clientX;
       y0 = e.clientY;
@@ -3885,6 +4196,7 @@
     paletteLocks = [false, false, false, false, false, false];
     renderPaletteEditor();
     renderAccount();
+    renderStats();
     applyDark();
     applyAddTop();
     document.getElementById('settingsOverlay').classList.add('open');
@@ -3949,16 +4261,6 @@
     });
   });
 
-  document.querySelectorAll('#taskMenu .task-menu-item').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const act = btn.dataset.act, id = taskMenuId;
-      closeTaskMenu();
-      if (id == null) return;
-      if (act === 'edit') startEditTask(id);
-      else if (act === 'del') deleteTask(id);
-    });
-  });
-
   document.getElementById('undoBtn').addEventListener('click', undo);
   document.getElementById('redoBtn').addEventListener('click', redo);
 
@@ -3966,10 +4268,6 @@
     const menu = document.getElementById('cardMenu');
     if (menu.classList.contains('open') && !menu.contains(e.target) && !e.target.closest('[data-act="menu"]')) {
       closeCardMenu();
-    }
-    const tMenu = document.getElementById('taskMenu');
-    if (tMenu.classList.contains('open') && !tMenu.contains(e.target) && !e.target.closest('.task-menu-btn')) {
-      closeTaskMenu();
     }
   });
 
@@ -3986,7 +4284,7 @@
   });
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeFeedback(); closeWelcome(); closeHsl(); closeChangelog(); closeSettings(); closeListModal(); closeConfirm(); closeCardMenu(); closeTaskMenu(); }
+    if (e.key === 'Escape') { closeFeedback(); closeWelcome(); closeHsl(); closeChangelog(); closeSettings(); closeListModal(); closeConfirm(); closeCardMenu(); }
   });
 
   // Undo / redo — Cmd/Ctrl+Z, add Shift to redo. Skipped while a text field
@@ -3998,6 +4296,32 @@
       e.preventDefault();
       if (e.shiftKey) redo(); else undo();
     }
+  });
+
+  // ⌘C / ⌘V inside a list: copy the whole list, or paste tasks in. Skipped
+  // when text is selected or a field is focused, so normal copy/paste works.
+  document.addEventListener('copy', e => {
+    if (!activeListId) return;
+    const t = document.activeElement;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    if (window.getSelection && String(window.getSelection())) return;
+    const list = activeList();
+    if (!list || !list.todos.length || !e.clipboardData) return;
+    e.clipboardData.setData('text/plain', listToBullets(list));
+    e.preventDefault();
+    flashTool('copyBtn', 'Copied');
+  });
+
+  document.addEventListener('paste', e => {
+    if (!activeListId) return;
+    const t = document.activeElement;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    const data = e.clipboardData || window.clipboardData;
+    const text = data && data.getData('text');
+    if (!text) return;
+    e.preventDefault();
+    const n = addTasksFromText(text);
+    flashTool('pasteBtn', n ? ('Added ' + n) : 'Nothing');
   });
 
   // Swipe a list to the right to slide back to all lists.
@@ -4170,8 +4494,8 @@
     }
     if (!haveBrowser) {
       local = { lists: [
-        newList('JotList 1', 0, DEFAULT_TODOS),
-        newList('JotList 2', 1, DEFAULT_TODOS),
+        newList('List 1', 0, DEFAULT_TODOS),
+        newList('List 2', 1, DEFAULT_TODOS),
       ] };
     }
     state = normalizeState(local);
@@ -4223,7 +4547,7 @@
     // Any list this browser has that the account lacks — empty or not, since
     // a list the user named is theirs. The one exception: an empty default
     // starter list ("JotList 1/2"), which is always there and not worth merging.
-    const defaults = ['JotList', 'JotList 1', 'JotList 2'];
+    const defaults = ['List 1', 'List 2', 'JotList', 'JotList 1', 'JotList 2'];
     const extras = browserLists.filter(l => {
       if (!l || accountIds.has(l.id)) return false;
       const empty = (!l.todos || !l.todos.length)
@@ -4381,6 +4705,59 @@
     }
   }
 
+  // --- Usage tracking ------------------------------------------------------
+  // Each browser gets a stable random id, recorded once in the `guests`
+  // table so unique visitors can be counted. Signed-in accounts are counted
+  // separately from the rows in `user_data`.
+  const GUEST_KEY = 'jotlist_guest_id';
+  const OWNER_EMAIL = 'michael@twoseam.com';
+
+  function trackGuest() {
+    if (!supa) return;
+    let gid = localStorage.getItem(GUEST_KEY);
+    if (!gid) {
+      gid = (window.crypto && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : 'g-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+      localStorage.setItem(GUEST_KEY, gid);
+    }
+    try {
+      supa.from('guests')
+        .upsert({ id: gid }, { onConflict: 'id', ignoreDuplicates: true })
+        .then(function () {}, function () {});
+    } catch (e) {}
+  }
+
+  // Owner-only usage panel in the settings drawer.
+  async function renderStats() {
+    const box = document.getElementById('statsBox');
+    if (!box) return;
+    if (!supa || !authUser
+        || (authUser.email || '').toLowerCase() !== OWNER_EMAIL) {
+      box.innerHTML = '';
+      return;
+    }
+    box.innerHTML =
+      '<div class="settings-divider"></div>'
+      + '<div class="settings-label">Usage</div>'
+      + '<div class="stats-grid">'
+      +   '<div class="stats-cell"><div class="stats-num" id="statUsers">—</div>'
+      +     '<div class="stats-label">Accounts</div></div>'
+      +   '<div class="stats-cell"><div class="stats-num" id="statGuests">—</div>'
+      +     '<div class="stats-label">Guests</div></div>'
+      + '</div>';
+    try {
+      const { data, error } = await supa.rpc('jotlist_stats');
+      if (error || !data) throw 0;
+      document.getElementById('statUsers').textContent =
+        data.users != null ? data.users : '—';
+      document.getElementById('statGuests').textContent =
+        data.guests != null ? data.guests : '—';
+    } catch (e) {
+      box.innerHTML += '<div class="account-note">Stats unavailable.</div>';
+    }
+  }
+
   // --- First-visit welcome ------------------------------------------------
   const WELCOME_KEY = 'jotlist_welcomed';
 
@@ -4433,10 +4810,15 @@
     document.getElementById('welcomeOverlay').classList.remove('open');
   }
 
-  // --- Feedback ------------------------------------------------------------
+  // --- Request a feature ---------------------------------------------------
   function openFeedback() {
     document.getElementById('feedbackText').value = '';
     document.getElementById('feedbackEmail').value = '';
+    document.getElementById('feedbackForm').style.display = '';
+    document.getElementById('feedbackSuccess').classList.remove('show');
+    const btn = document.getElementById('feedbackSend');
+    btn.disabled = false;
+    btn.textContent = 'Send request';
     document.getElementById('feedbackOverlay').classList.add('open');
   }
 
@@ -4444,15 +4826,33 @@
     document.getElementById('feedbackOverlay').classList.remove('open');
   }
 
-  function sendFeedback() {
+  // The request is stored in Supabase (table `feature_requests`) — no email
+  // address is ever shown to the user. A confirmation panel replaces the form.
+  async function sendFeedback() {
     const msg = document.getElementById('feedbackText').value.trim();
-    if (!msg) { closeFeedback(); return; }
-    const from = document.getElementById('feedbackEmail').value.trim();
-    const body = msg + (from ? '\n\nReply to: ' + from : '');
-    location.href = 'mailto:info@twoseam.com'
-      + '?subject=' + encodeURIComponent('JotList feedback')
-      + '&body=' + encodeURIComponent(body);
-    closeFeedback();
+    if (!msg) return;
+    const email = document.getElementById('feedbackEmail').value.trim();
+    const btn = document.getElementById('feedbackSend');
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    let ok = false;
+    if (supa) {
+      try {
+        const { error } = await supa.from('feature_requests').insert({
+          message: msg,
+          email: email || null,
+          user_id: authUser ? authUser.id : null,
+        });
+        ok = !error;
+      } catch (e) {}
+    }
+    if (ok) {
+      document.getElementById('feedbackForm').style.display = 'none';
+      document.getElementById('feedbackSuccess').classList.add('show');
+    } else {
+      btn.disabled = false;
+      btn.textContent = 'Try again';
+    }
   }
 
   applyDark();
@@ -4460,6 +4860,7 @@
   renderVersion();
   goHome();
   initSupa();
+  trackGuest();
   maybeWelcome();
 
   if ('serviceWorker' in navigator) {
