@@ -2041,6 +2041,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.10.0', date: '2026-05-22', changes: [
+      'Sign in and keep the lists you already made in this browser',
+    ]},
     { version: '1.9.0', date: '2026-05-22', changes: [
       'Edit a task from its three-dot menu, or right-click on desktop',
       'Add tasks straight from a 2×2 card',
@@ -3990,6 +3993,8 @@
         .from('user_data').select('state').eq('user_id', authUser.id).maybeSingle();
       if (error) return;
       if (data && data.state && Array.isArray(data.state.lists)) {
+        // Capture the browser's own lists before the cloud data replaces them.
+        const guestLists = (state.lists || []).slice();
         adoptingCloud = true;
         state = normalizeState(data.state);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -3998,11 +4003,39 @@
         applyDark();
         activeListId = null;
         goHome();
+        offerGuestMerge(guestLists);
       } else {
         // First sign-in: no cloud row yet — carry the local lists up.
         pushCloud();
       }
     } catch (e) {}
+  }
+
+  // After sign-in, the account's lists replace the browser's. If the browser
+  // held lists the account doesn't have, offer to fold them in.
+  function offerGuestMerge(guestLists) {
+    const accountIds = new Set(state.lists.map(l => l.id));
+    const extras = guestLists.filter(l =>
+      l && !accountIds.has(l.id) &&
+      ((l.todos && l.todos.length) || (l.completed && l.completed.length)));
+    if (!extras.length) return;
+    const n = extras.length;
+    showConfirm({
+      title: 'Add your browser lists?',
+      message: 'You have ' + n + (n === 1 ? ' list' : ' lists')
+        + ' saved in this browser that are not in your account yet. Add '
+        + (n === 1 ? 'it' : 'them') + '?',
+      confirmText: 'Add ' + (n === 1 ? 'list' : 'lists'),
+      onConfirm: () => {
+        extras.forEach(l => {
+          delete l.pos;   // re-flow into free cells of the account layout
+          if (!Array.isArray(l.completed)) l.completed = [];
+          state.lists.push(l);
+        });
+        saveState();
+        renderHome();
+      },
+    });
   }
 
   function queueCloudPush() {
