@@ -2096,6 +2096,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.13.4', date: '2026-05-22', changes: [
+      'Sign-in no longer offers to add an empty starter list',
+    ]},
     { version: '1.13.3', date: '2026-05-22', changes: [
       'Fixed: signed out, you only ever see your own browser lists',
       'Signing in now offers your browser lists even the empty ones',
@@ -4224,9 +4227,16 @@
       if (b && Array.isArray(b.lists)) browserLists = b.lists;
     } catch (e) {}
     const accountIds = new Set(state.lists.map(l => l.id));
-    // Any list this browser has that the account does not — empty or not;
-    // a list the user named is theirs even with no tasks yet.
-    const extras = browserLists.filter(l => l && !accountIds.has(l.id));
+    // Any list this browser has that the account lacks — empty or not, since
+    // a list the user named is theirs. The one exception: an empty default
+    // starter list ("JotList 1/2"), which is always there and not worth merging.
+    const defaults = ['JotList', 'JotList 1', 'JotList 2'];
+    const extras = browserLists.filter(l => {
+      if (!l || accountIds.has(l.id)) return false;
+      const empty = (!l.todos || !l.todos.length)
+        && (!l.completed || !l.completed.length);
+      return !(empty && defaults.indexOf(l.name) >= 0);
+    });
     if (!extras.length) return;
     const n = extras.length;
     showConfirm({
