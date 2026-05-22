@@ -2096,6 +2096,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.13.2', date: '2026-05-22', changes: [
+      'Fixed: signing in now reliably offers to add your browser lists',
+    ]},
     { version: '1.13.1', date: '2026-05-22', changes: [
       'Smoother task reorder — a cleaner lift, snappier slide, and a settle',
     ]},
@@ -4138,8 +4141,6 @@
         .from('user_data').select('state').eq('user_id', authUser.id).maybeSingle();
       if (error) return;
       if (data && data.state && Array.isArray(data.state.lists)) {
-        // Capture the browser's own lists before the cloud data replaces them.
-        const guestLists = (state.lists || []).slice();
         adoptingCloud = true;
         state = normalizeState(data.state);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -4149,19 +4150,26 @@
         applyDark();
         activeListId = null;
         goHome();
-        offerGuestMerge(guestLists);
+        offerGuestMerge();
       } else {
         // First sign-in: no cloud row yet — carry the local lists up.
         pushCloud();
       }
-    } catch (e) {}
+    } catch (e) { console.warn('JotList pullCloud:', e); }
   }
 
   // After sign-in, the account's lists replace the browser's. If the browser
-  // held lists the account doesn't have, offer to fold them in.
-  function offerGuestMerge(guestLists) {
+  // still holds lists the account lacks, offer to fold them in. The browser's
+  // own lists live in LOCAL_KEY (checklist_browser) — written only while
+  // signed out, untouched by signing in — so that is the reliable source.
+  function offerGuestMerge() {
+    let browserLists = [];
+    try {
+      const b = JSON.parse(localStorage.getItem(LOCAL_KEY) || 'null');
+      if (b && Array.isArray(b.lists)) browserLists = b.lists;
+    } catch (e) {}
     const accountIds = new Set(state.lists.map(l => l.id));
-    const extras = guestLists.filter(l =>
+    const extras = browserLists.filter(l =>
       l && !accountIds.has(l.id) &&
       ((l.todos && l.todos.length) || (l.completed && l.completed.length)));
     if (!extras.length) return;
@@ -4169,12 +4177,13 @@
     showConfirm({
       title: 'Add your browser lists?',
       message: 'You have ' + n + (n === 1 ? ' list' : ' lists')
-        + ' saved in this browser that are not in your account yet. Add '
-        + (n === 1 ? 'it' : 'them') + '?',
+        + ' saved in this browser ' + (n === 1 ? 'that is not' : 'that are not')
+        + ' in your account yet. Add ' + (n === 1 ? 'it' : 'them') + '?',
       confirmText: 'Add ' + (n === 1 ? 'list' : 'lists'),
       onConfirm: () => {
         extras.forEach(l => {
           if (!Array.isArray(l.completed)) l.completed = [];
+          if (!Array.isArray(l.todos)) l.todos = [];
           state.lists.push(l);   // appended — packs onto the end of the grid
         });
         saveState();
