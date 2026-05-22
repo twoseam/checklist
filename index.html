@@ -266,8 +266,11 @@
     gap: 10px;
   }
 
-  /* One shared 2-column layout on every device, so an arrangement made
-     anywhere looks the same everywhere. */
+  /* Desktop: a roomier page, 4 cards per row. */
+  @media (min-width: 720px) {
+    #homeView .view-inner { max-width: 900px; }
+    .list-grid { grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  }
 
   .list-card {
     background: var(--surface);
@@ -1921,6 +1924,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.7.2', date: '2026-05-22', changes: [
+      'Cards stay four-wide on Mac, two-wide on phone',
+    ]},
     { version: '1.7.1', date: '2026-05-22', changes: [
       'Fixed scrolling in the Mac app',
     ]},
@@ -2237,8 +2243,10 @@
   // --- Free-grid placement -------------------------------------------------
   // Each list keeps a cell {c,r} per column count (2 on phone, 4 on desktop),
   // so an arrangement made on one device never disturbs the other.
-  // One shared layout everywhere — always 2 columns.
-  function gridCols() { return 2; }
+  // Phone shows 2 columns, a wide screen 4. Each width keeps its own layout.
+  function gridCols() {
+    return window.matchMedia('(min-width: 720px)').matches ? 4 : 2;
+  }
   function listSize(list) { return list.size === 2 ? 2 : 1; }
 
   function markCells(occ, cell, size, val) {
@@ -2274,7 +2282,7 @@
   // Returns true if anything changed (so the caller can persist it).
   function ensurePositions(st) {
     let changed = false;
-    [gridCols()].forEach(cols => {
+    [2, 4].forEach(cols => {
       const occ = {};
       const needs = [];
       st.lists.forEach(l => {
