@@ -393,11 +393,10 @@
     gap: 6px;
   }
 
-  /* Scrollable-but-clipped task list inside a 2x2 card */
+  /* Task list inside a 2x2 card — natural height so the "+ Add a task"
+     row sits right after the last task, not pinned to the tile bottom.
+     The parent .card-preview does the clipping. */
   .card-preview-list {
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -2284,6 +2283,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.14.2', date: '2026-05-22', changes: [
+      'On a 2×2 card, "Add a task" tucks in at the end of the list',
+    ]},
     { version: '1.14.1', date: '2026-05-22', changes: [
       'Settings opens as a bottom sheet — swipe it down to close',
     ]},
@@ -2956,31 +2958,33 @@
     });
   }
 
-  // 2x2 cards render every task, then this trims the ones that overflow and
-  // shows a "+N more" line in their place — tapping it opens the full list.
+  // 2x2 cards render every task; this hides the ones that overflow the tile
+  // and shows a "+N more" line — tapping it opens the full list. The
+  // add-task row stays visible, tucked right after the last shown task.
   function trimBigPreviews() {
     document.querySelectorAll('.list-card.big').forEach(card => {
+      const preview = card.querySelector('.card-preview');
       const listEl = card.querySelector('.card-preview-list');
       const more = card.querySelector('.card-preview-more');
-      if (!listEl || !more) return;
+      const addEl = card.querySelector('.card-add-row, .card-add-input');
+      if (!preview || !listEl || !more) return;
       const items = [...listEl.querySelectorAll('.card-preview-item')];
       items.forEach(it => { it.style.display = ''; });
-      if (!items.length) { more.style.display = 'none'; return; }
-      // Do all the tasks fit with no indicator?
       more.style.display = 'none';
-      const last = items[items.length - 1].getBoundingClientRect();
-      if (last.bottom <= listEl.getBoundingClientRect().bottom + 0.5) return;
-      // They overflow — show the indicator (which shrinks the list), then
-      // count how many tasks still fit and hide the rest.
+      if (!items.length) return;
+      // Bottom of the lowest always-on element, and the tile's clip edge.
+      const tail = () =>
+        (addEl || items[items.length - 1]).getBoundingClientRect().bottom;
+      const limit = () => preview.getBoundingClientRect().bottom + 0.5;
+      if (tail() <= limit()) return;          // everything fits
+      // Overflowing — show the indicator, then hide trailing tasks until
+      // the visible items + indicator + add row all fit.
       more.style.display = 'block';
-      const limit = listEl.getBoundingClientRect().bottom + 0.5;
-      let shown = 0;
-      for (const it of items) {
-        if (it.getBoundingClientRect().bottom <= limit) shown++;
-        else break;
+      let shown = items.length;
+      while (shown > 1 && tail() > limit()) {
+        shown--;
+        items[shown].style.display = 'none';
       }
-      if (shown < 1) shown = 1;
-      items.forEach((it, i) => { it.style.display = i < shown ? '' : 'none'; });
       more.textContent = '+' + (items.length - shown) + ' more';
     });
   }
