@@ -371,6 +371,15 @@
     z-index: 2;
   }
 
+  /* The card a dragged list will merge into. */
+  .list-card.combine-over,
+  .list-grid.reordering .list-card.combine-over:hover {
+    transform: scale(1.07);
+    outline: 3px solid var(--accent);
+    outline-offset: -3px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.3);
+  }
+
   /* Task preview inside a 2x2 card */
   .card-preview {
     flex: 1;
@@ -1924,6 +1933,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.8.0', date: '2026-05-22', changes: [
+      'Drop one list onto another to combine them into one',
+    ]},
     { version: '1.7.2', date: '2026-05-22', changes: [
       'Cards stay four-wide on Mac, two-wide on phone',
     ]},
@@ -2277,6 +2289,19 @@
     return occ;
   }
 
+  // Maps each occupied cell to the list id that owns it (drag excluded).
+  function cellOwnerMap(cols, excludeId) {
+    const m = {};
+    state.lists.forEach(l => {
+      if (l.id === excludeId || !l.pos || !l.pos[cols]) return;
+      const p = l.pos[cols], s = listSize(l);
+      for (let dc = 0; dc < s; dc++)
+        for (let dr = 0; dr < s; dr++)
+          m[(p.c + dc) + ',' + (p.r + dr)] = l.id;
+    });
+    return m;
+  }
+
   // Give every list a valid {c,r} for both grids. Good positions are kept;
   // missing, off-grid, or overlapping ones get re-flowed into a free cell.
   // Returns true if anything changed (so the caller can persist it).
@@ -2594,12 +2619,14 @@
       id, source: card, clone, drop,
       grabX: x - rect.left, grabY: y - rect.top,
       size: listSize(getList(id)), occ: gridOccupancy(cols, id),
-      target: null,
+      owners: cellOwnerMap(cols, id),
+      target: null, hoverCard: null,
     };
     moveHomeDrag(x, y);
   }
 
   // Free placement: the card snaps to whichever grid cell it is dragged over.
+  // Dropped onto another card's cell, the two lists combine instead.
   function moveHomeDrag(x, y) {
     if (!homeDrag) return;
     homeDrag.clone.style.transform =
@@ -2613,30 +2640,40 @@
     let r = Math.round((y - homeDrag.grabY - gr.top) / (cell + gap));
     c = Math.max(0, Math.min(c, cols - homeDrag.size));
     r = Math.max(0, r);
-    const ok = cellsFree(homeDrag.occ, c, r, homeDrag.size, cols);
-    homeDrag.target = ok ? { c, r } : null;
     const drop = homeDrag.drop;
-    if (ok) {
+    if (homeDrag.hoverCard) homeDrag.hoverCard.classList.remove('combine-over');
+    homeDrag.hoverCard = null;
+    const owner = homeDrag.owners[c + ',' + r];
+    if (owner != null) {
+      // The top-left cell sits on another list — offer to combine them.
+      homeDrag.target = { combine: owner };
+      drop.style.display = 'none';
+      const onto = grid.querySelector('.list-card[data-list-id="' + owner + '"]');
+      if (onto) { onto.classList.add('combine-over'); homeDrag.hoverCard = onto; }
+    } else if (cellsFree(homeDrag.occ, c, r, homeDrag.size, cols)) {
+      homeDrag.target = { c, r };
       drop.style.display = '';
       drop.style.gridColumn = (c + 1) + ' / span ' + homeDrag.size;
       drop.style.gridRow = (r + 1) + ' / span ' + homeDrag.size;
     } else {
+      homeDrag.target = null;
       drop.style.display = 'none';
     }
   }
 
   function endHomeDrag(commit) {
     if (!homeDrag) return;
-    const { clone, drop, id, target } = homeDrag;
+    const { clone, drop, id, target, hoverCard } = homeDrag;
     homeDrag = null;
     detachHomeListeners();
     clone.remove();
     if (drop) drop.remove();
+    if (hoverCard) hoverCard.classList.remove('combine-over');
     const grid = document.getElementById('listGrid');
     grid.classList.remove('reordering');
     grid.style.backgroundSize = '';
     grid.style.minHeight = '';
-    if (commit !== false && target) {
+    if (commit !== false && target && target.combine == null) {
       const list = getList(id);
       if (list) {
         if (!list.pos) list.pos = {};
@@ -2645,6 +2682,30 @@
       }
     }
     renderHome();
+    if (commit !== false && target && target.combine != null) {
+      askCombine(id, target.combine);
+    }
+  }
+
+  // Merge one list into another. Non-destructive — every task and every
+  // completed item is kept; only the emptied list is removed.
+  function askCombine(fromId, intoId) {
+    const from = getList(fromId), into = getList(intoId);
+    if (!from || !into || from === into) return;
+    showConfirm({
+      title: 'Combine lists',
+      message: 'Move every task from "' + from.name + '" into "' + into.name
+        + '"? "' + from.name + '" is then removed.',
+      confirmText: 'Combine',
+      onConfirm: () => {
+        into.todos = into.todos.concat(from.todos);
+        into.completed = (into.completed || []).concat(from.completed || []);
+        into.completed.sort((a, b) => (b.at || '').localeCompare(a.at || ''));
+        state.lists = state.lists.filter(l => l.id !== fromId);
+        saveState();
+        renderHome();
+      },
+    });
   }
 
   function homeMove(e) {
