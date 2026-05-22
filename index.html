@@ -2854,6 +2854,8 @@
   let authUser = null;        // the signed-in user, or null
   let cloudTimer = null;      // debounce handle for cloud saves
   let adoptingCloud = false;  // true while we're loading data down from the cloud
+  let cloudChannel = null;    // realtime subscription, or null
+  let lastPushedJson = '';    // our own last write — so we ignore its echo
 
   function initSupa() {
     if (!window.supabase) return;          // CDN blocked → stay local-only
@@ -2862,7 +2864,7 @@
       const wasSignedIn = !!authUser;
       authUser = sess ? sess.user : null;
       renderAccount();
-      if (authUser && !wasSignedIn) pullCloud();
+      if (authUser && !wasSignedIn) { pullCloud(); subscribeCloud(); }
     });
   }
 
@@ -2900,6 +2902,7 @@
 
   async function pushCloud() {
     if (!supa || !authUser) return;
+    lastPushedJson = JSON.stringify(state);
     try {
       await supa.from('user_data').upsert({
         user_id: authUser.id,
@@ -2907,6 +2910,33 @@
         updated_at: new Date().toISOString(),
       });
     } catch (e) {}
+  }
+
+  // Live sync: when another device changes the data, pull it in immediately.
+  function subscribeCloud() {
+    if (!supa || !authUser) return;
+    if (cloudChannel) { supa.removeChannel(cloudChannel); cloudChannel = null; }
+    cloudChannel = supa.channel('sync-' + authUser.id)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'user_data', filter: 'user_id=eq.' + authUser.id },
+        payload => {
+          const incoming = payload.new && payload.new.state;
+          if (!incoming || !Array.isArray(incoming.lists)) return;
+          const incJson = JSON.stringify(incoming);
+          // ignore the echo of our own write, and no-op changes
+          if (incJson === lastPushedJson || incJson === JSON.stringify(state)) return;
+          adoptingCloud = true;
+          state = incoming;
+          if (!Array.isArray(state.palette) || state.palette.length !== 6) {
+            state.palette = DEFAULT_PALETTE.slice();
+          }
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+          adoptingCloud = false;
+          rebuildColors();
+          applyPalette();
+          render();
+        })
+      .subscribe();
   }
 
   async function signIn() {
@@ -2919,6 +2949,7 @@
 
   async function signOut() {
     if (!supa) return;
+    if (cloudChannel) { supa.removeChannel(cloudChannel); cloudChannel = null; }
     await supa.auth.signOut();
     authUser = null;
     renderAccount();
