@@ -2088,6 +2088,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.11.5', date: '2026-05-22', changes: [
+      'Undo no longer gets wiped when your lists sync',
+    ]},
     { version: '1.11.4', date: '2026-05-22', changes: [
       'Fixed undo so every checked-off task is its own step',
     ]},
@@ -4199,9 +4202,22 @@
     cloudTimer = setTimeout(pushCloud, 800);
   }
 
+  // Order-insensitive JSON. Supabase jsonb does not preserve object key
+  // order, so a plain JSON.stringify of an echoed write never matches what
+  // we sent — sort keys so the comparison is reliable.
+  function sortedJson(v) {
+    if (Array.isArray(v)) return '[' + v.map(sortedJson).join(',') + ']';
+    if (v && typeof v === 'object') {
+      return '{' + Object.keys(v).sort().map(function (k) {
+        return JSON.stringify(k) + ':' + sortedJson(v[k]);
+      }).join(',') + '}';
+    }
+    return JSON.stringify(v);
+  }
+
   async function pushCloud() {
     if (!supa || !authUser) return;
-    lastPushedJson = JSON.stringify(state);
+    lastPushedJson = sortedJson(state);
     try {
       await supa.from('user_data').upsert({
         user_id: authUser.id,
@@ -4221,14 +4237,15 @@
         payload => {
           const incoming = payload.new && payload.new.state;
           if (!incoming || !Array.isArray(incoming.lists)) return;
-          const incJson = JSON.stringify(incoming);
-          // ignore the echo of our own write, and no-op changes
-          if (incJson === lastPushedJson || incJson === JSON.stringify(state)) return;
+          // Ignore the echo of our own writes and any no-op change. Undo
+          // history is deliberately NOT reset here, so a sync round-trip
+          // never wipes the undo stack.
+          const inc = sortedJson(incoming);
+          if (inc === lastPushedJson || inc === sortedJson(state)) return;
           adoptingCloud = true;
           state = normalizeState(incoming);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
           adoptingCloud = false;
-          resetHistory();
           applyPalette();
           applyDark();
           if (activeListId && activeList()) themeList(listHex(activeList()));
