@@ -95,7 +95,8 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    body, .card-inner, .list-card-badge { animation: none; }
+    body, .card-inner, .list-card-badge,
+    .welcome-gear, .welcome-ripple { animation: none; }
     #listView { transition: none; }
   }
 
@@ -1066,6 +1067,65 @@
   .account-btn:active { transform: scale(0.98); }
   .account-btn.google svg { width: 17px; height: 17px; flex-shrink: 0; }
 
+  /* First-visit welcome */
+  .welcome-modal { max-width: 360px; text-align: center; }
+
+  .welcome-gear-demo {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    margin: 4px auto 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .welcome-ripple {
+    position: absolute;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    animation: welcomeRipple 2.2s ease-out infinite;
+  }
+
+  .welcome-gear {
+    display: flex;
+    color: var(--accent);
+    animation: welcomeTap 2.2s ease-in-out infinite;
+  }
+
+  .welcome-gear svg { width: 42px; height: 42px; }
+
+  @keyframes welcomeTap {
+    0%, 58%, 100% { transform: scale(1) rotate(0deg); }
+    68% { transform: scale(0.82) rotate(0deg); }
+    84% { transform: scale(1) rotate(45deg); }
+  }
+
+  @keyframes welcomeRipple {
+    0%, 58% { transform: scale(0.55); opacity: 0; }
+    68% { transform: scale(0.55); opacity: 0.9; }
+    100% { transform: scale(2.5); opacity: 0; }
+  }
+
+  .welcome-title {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--text);
+    margin-bottom: 10px;
+  }
+
+  .welcome-body {
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+  }
+
+  .welcome-body strong { color: var(--text); }
+  .welcome-btn { margin-top: 8px; }
+
   .overlay {
     position: fixed;
     inset: 0;
@@ -1357,6 +1417,20 @@
   </div>
 </div>
 
+<!-- FIRST-VISIT WELCOME -->
+<div class="overlay" id="welcomeOverlay">
+  <div class="modal welcome-modal">
+    <div class="welcome-gear-demo">
+      <span class="welcome-ripple"></span>
+      <span class="welcome-gear"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.3"/><path d="M12 2v3.2M12 18.8V22M22 12h-3.2M5.2 12H2M19.07 4.93l-2.26 2.26M7.19 16.81l-2.26 2.26M19.07 19.07l-2.26-2.26M7.19 7.19L4.93 4.93"/></svg></span>
+    </div>
+    <h2 class="welcome-title">Welcome to JotList</h2>
+    <p class="welcome-body">No sign-up. No email. No nonsense. Your lists live right here in this browser — private to this device.</p>
+    <p class="welcome-body">Want them on your phone <em>and</em> your laptop? Tap the <strong>gear</strong> and sign in. That's the only reason to.</p>
+    <button class="palette-btn primary welcome-btn" onclick="closeWelcome()">Start jotting</button>
+  </div>
+</div>
+
 <!-- LIST CREATE/EDIT MODAL -->
 <div class="overlay" id="listModalOverlay">
   <div class="modal">
@@ -1398,6 +1472,9 @@
 
 <script>
   const STORAGE_KEY = 'checklist_data';
+  // The browser's own lists, snapshotted at sign-in and restored at sign-out
+  // so a signed-in account's (possibly private) lists never linger after.
+  const LOCAL_KEY = 'checklist_local';
   // The six brand-palette slots. DEFAULT_PALETTE is the factory setting; the
   // live palette lives in state.palette and may be user-generated in Settings.
   const DEFAULT_PALETTE = ['#c0392b', '#222e50', '#007991', '#4caf68', '#f3a712', '#7226f0'];
@@ -1429,6 +1506,11 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.5.0', date: '2026-05-21', changes: [
+      'Sign in with Google — save your lists and sync them across devices',
+      'Palette changes now recolour the whole app instantly',
+      'Turn individual palette colours on or off',
+    ]},
     { version: '1.4.6', date: '2026-05-21', changes: [
       'Press and hold a task to drag it into a new order — now on phone too',
       'Cleaner, smoother animation when you complete a task',
@@ -2754,6 +2836,10 @@
     if (e.target.id === 'hslOverlay') closeHsl();
   });
 
+  document.getElementById('welcomeOverlay').addEventListener('click', e => {
+    if (e.target.id === 'welcomeOverlay') closeWelcome();
+  });
+
   document.querySelectorAll('#cardMenu .card-menu-item').forEach(btn => {
     btn.addEventListener('click', () => {
       const act = btn.dataset.act, id = cardMenuListId;
@@ -2784,7 +2870,7 @@
   });
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeHsl(); closeChangelog(); closeSettings(); closeListModal(); closeConfirm(); closeCardMenu(); }
+    if (e.key === 'Escape') { closeWelcome(); closeHsl(); closeChangelog(); closeSettings(); closeListModal(); closeConfirm(); closeCardMenu(); }
   });
 
   // Swipe a list to the right to slide back to all lists.
@@ -2993,6 +3079,8 @@
 
   async function signIn() {
     if (!supa) return;
+    // Preserve this browser's own lists before the account takes over.
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(state));
     await supa.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: location.origin + location.pathname },
@@ -3005,6 +3093,20 @@
     await supa.auth.signOut();
     authUser = null;
     renderAccount();
+    // Drop the account's lists from this device and restore the browser's own.
+    let local = null;
+    try { local = JSON.parse(localStorage.getItem(LOCAL_KEY) || 'null'); } catch (e) {}
+    if (!local || !Array.isArray(local.lists)) {
+      local = { lists: [
+        newList('JotList 1', 0, DEFAULT_TODOS),
+        newList('JotList 2', 1, DEFAULT_TODOS),
+      ] };
+    }
+    state = normalizeState(local);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    applyPalette();
+    activeListId = null;
+    goHome();
   }
 
   function renderAccount() {
@@ -3023,9 +3125,23 @@
     }
   }
 
+  // --- First-visit welcome ------------------------------------------------
+  const WELCOME_KEY = 'jotlist_welcomed';
+
+  function maybeWelcome() {
+    if (localStorage.getItem(WELCOME_KEY)) return;
+    document.getElementById('welcomeOverlay').classList.add('open');
+  }
+
+  function closeWelcome() {
+    localStorage.setItem(WELCOME_KEY, '1');
+    document.getElementById('welcomeOverlay').classList.remove('open');
+  }
+
   renderVersion();
   goHome();
   initSupa();
+  maybeWelcome();
 </script>
 </body>
 </html>
