@@ -605,14 +605,17 @@
     width: 42px;
     height: 42px;
     border-radius: 50%;
-    border: none;
-    background: color-mix(in srgb, var(--on-bg) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--on-bg) 26%, transparent);
+    background: color-mix(in srgb, var(--on-bg) 13%, transparent);
+    backdrop-filter: blur(14px) saturate(1.6);
+    -webkit-backdrop-filter: blur(14px) saturate(1.6);
+    box-shadow: 0 3px 14px rgba(0,0,0,0.18);
     color: var(--on-bg);
     cursor: pointer;
     transition: background 0.15s, opacity 0.2s, transform 0.12s;
   }
 
-  .footer-btn:hover { background: color-mix(in srgb, var(--on-bg) 24%, transparent); }
+  .footer-btn:hover { background: color-mix(in srgb, var(--on-bg) 22%, transparent); }
   .footer-btn:active { transform: scale(0.9); }
   /* Ghosted out until there is something to undo / redo */
   .footer-btn.ghosted { opacity: 0.3; pointer-events: none; }
@@ -1155,15 +1158,18 @@
     width: 42px;
     height: 42px;
     border-radius: 50%;
-    border: none;
-    background: color-mix(in srgb, var(--on-bg) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--on-bg) 26%, transparent);
+    background: color-mix(in srgb, var(--on-bg) 13%, transparent);
+    backdrop-filter: blur(14px) saturate(1.6);
+    -webkit-backdrop-filter: blur(14px) saturate(1.6);
+    box-shadow: 0 3px 14px rgba(0,0,0,0.18);
     color: var(--on-bg);
     cursor: pointer;
     transition: background 0.15s, transform 0.25s ease;
   }
 
   .settings-btn:hover {
-    background: color-mix(in srgb, var(--on-bg) 24%, transparent);
+    background: color-mix(in srgb, var(--on-bg) 22%, transparent);
     transform: rotate(45deg);
   }
 
@@ -2082,6 +2088,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.11.3', date: '2026-05-22', changes: [
+      'A frosted-glass look for the footer buttons',
+    ]},
     { version: '1.11.2', date: '2026-05-22', changes: [
       'Undo and redo sit in the footer beside the gear, on every page',
     ]},
