@@ -1274,6 +1274,40 @@
   .account-btn:active { transform: scale(0.98); }
   .account-btn.google svg { width: 17px; height: 17px; flex-shrink: 0; }
 
+  .account-or {
+    position: relative;
+    text-align: center;
+    font-size: 0.74rem;
+    color: var(--text-dim);
+    margin: 12px 0;
+  }
+  .account-or::before,
+  .account-or::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: calc(50% - 16px);
+    height: 1px;
+    background: var(--border-subtle);
+  }
+  .account-or::before { left: 0; }
+  .account-or::after { right: 0; }
+
+  .account-email-form { display: flex; flex-direction: column; gap: 8px; }
+
+  .account-input {
+    width: 100%;
+    font: inherit;
+    font-size: 0.88rem;
+    color: var(--text);
+    background: var(--surface-alt);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+  }
+  .account-input:focus { outline: none; border-color: var(--accent); }
+  .account-input::placeholder { color: var(--text-dim); }
+
   /* First-visit welcome */
   .welcome-modal { max-width: 360px; overflow: hidden; padding-left: 0; padding-right: 0; }
 
@@ -3609,6 +3643,25 @@
     });
   }
 
+  // Email magic link — for people without a Google account.
+  async function signInEmail(email) {
+    if (!supa || !email) return;
+    const box = document.getElementById('accountBox');
+    if (box) box.innerHTML = `<div class="account-note">Sending a link…</div>`;
+    const { error } = await supa.auth.signInWithOtp({
+      email: email,
+      options: { emailRedirectTo: location.origin + location.pathname },
+    });
+    if (box) {
+      box.innerHTML = error
+        ? `<div class="account-note">Couldn't send the link. ${esc(error.message)}</div>`
+          + `<button class="account-btn" id="emailRetry">Try again</button>`
+        : `<div class="account-note">Check <strong>${esc(email)}</strong> for a sign-in link from JotList. Open it on whichever device you want signed&nbsp;in.</div>`;
+      const retry = box.querySelector('#emailRetry');
+      if (retry) retry.addEventListener('click', renderAccount);
+    }
+  }
+
   async function signOut() {
     if (!supa) return;
     if (cloudChannel) { supa.removeChannel(cloudChannel); cloudChannel = null; }
@@ -3644,8 +3697,17 @@
     } else {
       box.innerHTML =
         `<div class="account-note">Sign in to save your lists and sync them across your devices. JotList works fine without an account too.</div>`
-        + `<button class="account-btn google" id="signInBtn">${GOOGLE_ICON}<span>Continue with Google</span></button>`;
+        + `<button class="account-btn google" id="signInBtn">${GOOGLE_ICON}<span>Continue with Google</span></button>`
+        + `<div class="account-or">or</div>`
+        + `<form class="account-email-form" id="emailForm">`
+        +   `<input type="email" class="account-input" id="emailInput" placeholder="you@email.com" required>`
+        +   `<button class="account-btn" type="submit">Email me a sign-in link</button>`
+        + `</form>`;
       box.querySelector('#signInBtn').addEventListener('click', signIn);
+      box.querySelector('#emailForm').addEventListener('submit', e => {
+        e.preventDefault();
+        signInEmail(box.querySelector('#emailInput').value.trim());
+      });
     }
   }
 
