@@ -1305,14 +1305,19 @@
   .account-input {
     width: 100%;
     font: inherit;
-    font-size: 0.88rem;
+    font-size: 0.9rem;
     color: var(--text);
     background: var(--surface-alt);
-    border: 1px solid var(--border-subtle);
+    border: 1.5px solid var(--border-subtle);
     border-radius: var(--radius-sm);
-    padding: 10px 12px;
+    padding: 12px 14px;
+    transition: border-color 0.13s, box-shadow 0.13s;
   }
-  .account-input:focus { outline: none; border-color: var(--accent); }
+  .account-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
   .account-input::placeholder { color: var(--text-dim); }
 
   /* First-visit welcome */
@@ -1909,6 +1914,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.6.1', date: '2026-05-21', changes: [
+      'Sign in with Apple, or an email link — not just Google',
+    ]},
     { version: '1.6.0', date: '2026-05-21', changes: [
       'Resize a list card — drag the corner to a 2×2 tile that shows its tasks',
       'Tick tasks off straight from a big card',
