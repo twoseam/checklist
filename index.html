@@ -2390,7 +2390,16 @@
     }
   }
 
-  window.addEventListener('resize', () => { if (!activeListId) sizeGrid(); });
+  // Re-square the grid after a viewport change. iOS reports a stale width
+  // during a rotation, so run again once the layout has settled.
+  function reflowGrid() {
+    if (activeListId) return;
+    sizeGrid();
+    requestAnimationFrame(sizeGrid);
+    setTimeout(sizeGrid, 300);
+  }
+  window.addEventListener('resize', reflowGrid);
+  window.addEventListener('orientationchange', reflowGrid);
 
   // Check a task off straight from a 2x2 card's preview.
   function completeFromCard(listId, taskId) {
