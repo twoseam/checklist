@@ -749,8 +749,6 @@
   }
 
   .task-item:last-child { border-bottom: none; }
-  .task-item.dragging { opacity: 0.2; }
-  .task-item.drag-over { box-shadow: inset 0 2px 0 0 var(--accent); }
 
   /* Touch press-and-hold reorder: the dragged row becomes a visible landing
      slot (its content hides, a tinted placeholder stays) so you can see
@@ -2103,6 +2101,10 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.13.6', date: '2026-05-22', changes: [
+      'Task drag-reorder now works the same with a mouse as on touch',
+      'Smoother slide as rows move aside; dropped the tilt',
+    ]},
     { version: '1.13.5', date: '2026-05-22', changes: [
       'Dragging a task shows a slot where it will land',
     ]},
@@ -2346,7 +2348,6 @@
   let flashCompletedId = null;    // id of a freshly-completed task, to animate into History
   let historyOpen = false;        // is the History section expanded
   let cardMenuListId = null;      // list id the ⋯ menu is currently open for
-  let dragId = null;
   let paletteLocks = [false, false, false, false, false, false];
 
   // Undo / redo — a stack of whole-state snapshots.
@@ -3281,55 +3282,10 @@
     inp.addEventListener('blur', () => finish(true));
   }
 
-  // Drag reorder
-  function onDragStart(e, id) {
-    dragId = id;
-    e.dataTransfer.effectAllowed = 'move';
-    requestAnimationFrame(() => {
-      const el = document.querySelector(`[data-id="${id}"]`);
-      if (el) el.classList.add('dragging');
-    });
-  }
-
-  function onDragEnd() {
-    document.querySelectorAll('.task-item').forEach(el => el.classList.remove('dragging', 'drag-over'));
-    dragId = null;
-  }
-
-  function onDragOver(e, id) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    document.querySelectorAll('.task-item').forEach(el => el.classList.remove('drag-over'));
-    if (id !== dragId) {
-      const el = document.querySelector(`[data-id="${id}"]`);
-      if (el) el.classList.add('drag-over');
-    }
-  }
-
-  function onDrop(e, targetId) {
-    e.preventDefault();
-    if (dragId == null || dragId === targetId) return;
-    const list = activeList();
-    if (!list) return;
-    const fromIdx = list.todos.findIndex(t => t.id === dragId);
-    const toIdx = list.todos.findIndex(t => t.id === targetId);
-    if (fromIdx < 0 || toIdx < 0) return;
-    const [moved] = list.todos.splice(fromIdx, 1);
-    list.todos.splice(toIdx, 0, moved);
-    dragId = null;
-    saveState();
-    render();
-  }
-
   function makeItem(task) {
     const div = document.createElement('div');
     div.className = 'task-item';
     div.setAttribute('data-id', task.id);
-    div.draggable = true;
-    div.addEventListener('dragstart', e => onDragStart(e, task.id));
-    div.addEventListener('dragend', onDragEnd);
-    div.addEventListener('dragover', e => onDragOver(e, task.id));
-    div.addEventListener('drop', e => onDrop(e, task.id));
 
     div.innerHTML = `
       <div class="task-action-bg">
@@ -3376,9 +3332,10 @@
     return div;
   }
 
-  // Active task on touch: swipe right/left to complete/delete,
-  // press-and-hold to drag-reorder.
+  // Active task: swipe right/left to complete/delete, press-and-hold to
+  // drag-reorder. Works with touch and mouse alike.
   let taskDrag = null;  // active reorder: { source, clone, grabX, grabY, lastOver, cooldownUntil }
+  let lastTaskTouch = 0;   // guards against mouse events synthesised after a touch
 
   // Re-lay-out the todo list with a FLIP animation so rows visibly slide.
   function flipTaskMove(moveFn) {
@@ -3393,7 +3350,7 @@
     });
     requestAnimationFrame(() => {
       rows.forEach(r => {
-        r.style.transition = 'transform 0.17s cubic-bezier(0.2, 0.9, 0.25, 1)';
+        r.style.transition = 'transform 0.24s cubic-bezier(0.4, 0, 0.2, 1)';
         r.style.transform = '';
       });
     });
@@ -3435,7 +3392,7 @@
       if (!taskDrag) return;
       taskDrag.clone.style.transform =
         'translate(' + (x - taskDrag.grabX) + 'px,' + (y - taskDrag.grabY)
-        + 'px) scale(1.05) rotate(-2deg)';
+        + 'px) scale(1.05)';
       if (Date.now() < taskDrag.cooldownUntil) return;
       const under = document.elementFromPoint(x, y);
       const overRow = under && under.closest('.task-item');
@@ -3467,9 +3424,9 @@
         }
         // Settle: glide the lifted clone down into the row's final slot.
         const dest = source.getBoundingClientRect();
-        clone.style.transition = 'transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1)';
+        clone.style.transition = 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
         clone.style.transform =
-          'translate(' + dest.left + 'px,' + dest.top + 'px) scale(1) rotate(0deg)';
+          'translate(' + dest.left + 'px,' + dest.top + 'px) scale(1)';
         setTimeout(() => {
           clone.remove();
           source.classList.remove('task-dragging');
@@ -3484,6 +3441,7 @@
 
     div.addEventListener('touchstart', e => {
       if (e.touches.length !== 1) { track = false; clearHold(); return; }
+      lastTaskTouch = Date.now();
       x0 = e.touches[0].clientX;
       y0 = e.touches[0].clientY;
       d = 0; decided = false; horiz = false; track = true;
@@ -3546,6 +3504,31 @@
     }
     div.addEventListener('touchend', endTouch);
     div.addEventListener('touchcancel', endTouch);
+
+    // Desktop: press-and-hold with the mouse to drag-reorder, same as touch.
+    function onTaskMouseMove(e) {
+      if (taskDrag) { moveDrag(e.clientX, e.clientY); return; }
+      if (Math.abs(e.clientX - x0) > HOLD_SLOP || Math.abs(e.clientY - y0) > HOLD_SLOP) {
+        clearHold();
+      }
+    }
+    function onTaskMouseUp() {
+      clearHold();
+      document.removeEventListener('mousemove', onTaskMouseMove);
+      document.removeEventListener('mouseup', onTaskMouseUp);
+      if (taskDrag) endDrag(true);
+    }
+    div.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      if (e.target.closest('.checkbox') || e.target.closest('.task-menu-btn')) return;
+      if (Date.now() - lastTaskTouch < 800) return;   // ignore touch-synth clicks
+      x0 = e.clientX;
+      y0 = e.clientY;
+      clearHold();
+      holdTimer = setTimeout(() => beginDrag(x0, y0), HOLD_MS);
+      document.addEventListener('mousemove', onTaskMouseMove);
+      document.addEventListener('mouseup', onTaskMouseUp);
+    });
   }
 
   // Completed task: swipe right to restore, swipe left to delete.
