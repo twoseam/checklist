@@ -391,8 +391,8 @@
     text-align: center;
     cursor: pointer;
     color: var(--on-bg);
-    font-size: 0.82rem;
-    font-weight: 600;
+    font-size: 2.2rem;
+    font-weight: 300;
     transition: background 0.15s;
   }
 
@@ -909,6 +909,34 @@
 
   .palette-swatch:active { transform: scale(0.92); }
 
+  .palette-del {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-alt);
+    color: var(--text-dim);
+    transition: transform 0.12s;
+  }
+
+  .palette-del:active { transform: scale(0.85); }
+
+  .palette-col.off .palette-lock { visibility: hidden; }
+  .palette-col.off .palette-swatch {
+    background: var(--surface-alt);
+    border: 1.5px dashed var(--text-dim);
+    box-shadow: none;
+    cursor: default;
+  }
+  .palette-col.off .palette-swatch:active { transform: none; }
+
   /* HSL colour picker */
   #hslOverlay { z-index: 110; }
   .hsl-modal { max-width: 360px; }
@@ -1373,11 +1401,30 @@
   // The six brand-palette slots. DEFAULT_PALETTE is the factory setting; the
   // live palette lives in state.palette and may be user-generated in Settings.
   const DEFAULT_PALETTE = ['#c0392b', '#222e50', '#007991', '#4caf68', '#f3a712', '#7226f0'];
-  const BRAND = DEFAULT_PALETTE[0];
-  // COLORS = the list-card colour choices, rebuilt from the live palette.
-  let COLORS = DEFAULT_PALETTE.map((hex, i) => ({ hex, name: 'Colour ' + (i + 1) }));
-  function rebuildColors() {
-    COLORS = state.palette.map((hex, i) => ({ hex, name: 'Colour ' + (i + 1) }));
+  // List colours are stored as a slot index (0-5) into the live palette, so a
+  // list re-colours itself whenever its palette slot changes.
+  function listHex(list) {
+    const i = (list && typeof list.color === 'number') ? list.color : 0;
+    return state.palette[i] || state.palette[0];
+  }
+
+  // Fold any older saved data into the current shape.
+  function normalizeState(st) {
+    if (!st || !Array.isArray(st.lists)) return st;
+    if (!Array.isArray(st.palette) || st.palette.length !== 6) {
+      st.palette = DEFAULT_PALETTE.slice();
+    }
+    if (!Array.isArray(st.paletteOn) || st.paletteOn.length !== 6) {
+      st.paletteOn = [true, true, true, true, true, true];
+    }
+    st.paletteOn[0] = true;  // slot 1 can never be turned off
+    st.lists.forEach(l => {
+      if (typeof l.color !== 'number') {
+        const idx = st.palette.indexOf(l.color);
+        l.color = idx >= 0 ? idx : 0;
+      }
+    });
+    return st;
   }
 
   // Newest version first. Keep bullets VERY short.
@@ -1497,13 +1544,13 @@
     } else if (raw && Array.isArray(raw.todos)) {
       // Migrate the old single-list format into the first list.
       st = { lists: [{
-        id: uid(), name: 'JotList', color: BRAND,
+        id: uid(), name: 'JotList', color: 0,
         todos: raw.todos || [], completed: raw.completed || [], batches: raw.batches || [],
       }] };
     } else {
       st = { lists: [
-        newList('JotList 1', COLORS[0].hex, DEFAULT_TODOS),
-        newList('JotList 2', COLORS[1].hex, DEFAULT_TODOS),
+        newList('JotList 1', 0, DEFAULT_TODOS),
+        newList('JotList 2', 1, DEFAULT_TODOS),
       ] };
     }
 
@@ -1520,23 +1567,19 @@
       delete l.batches;
     });
 
-    if (!Array.isArray(st.palette) || st.palette.length !== 6) {
-      st.palette = DEFAULT_PALETTE.slice();
-    }
-    return st;
+    return normalizeState(st);
   }
 
   let state = loadState();
   let activeListId = null;        // null = home view
   let editingListId = null;       // list being edited in the modal (null = creating)
-  let pickedColor = COLORS[0].hex;
+  let pickedColor = 0;
   let flashCompletedId = null;    // id of a freshly-completed task, to animate into History
   let historyOpen = true;         // is the History section expanded
   let cardMenuListId = null;      // list id the ⋯ menu is currently open for
   let dragId = null;
   let paletteLocks = [false, false, false, false, false, false];
 
-  rebuildColors();
   applyPalette();
 
   function saveState() {
@@ -1601,14 +1644,14 @@
     const first = state.lists[0];
     document.documentElement.style.setProperty('--app-bg', homeGradient());
     document.getElementById('homeView').style.setProperty('--on-bg',
-      first && isLight(first.color) ? '#2a2118' : '#fff');
+      first && isLight(listHex(first)) ? '#2a2118' : '#fff');
   }
 
   // Home backdrop: a soft gradient of the lists' own colors. The body slowly
   // drifts its background-position, so it gently fades through them.
   function homeGradient() {
-    let colors = state.lists.map(l => l.color);
-    if (colors.length === 0) colors = [BRAND];
+    let colors = state.lists.map(listHex);
+    if (colors.length === 0) colors = [state.palette[0]];
     if (colors.length === 1) {
       const c = colors[0];
       colors = [c, shade(c, 0.16), shade(c, -0.12)];
@@ -1628,7 +1671,7 @@
     const list = getList(id);
     if (!list) return;
     activeListId = id;
-    themeList(list.color);
+    themeList(listHex(list));
     renderList();
     const lv = document.getElementById('listView');
     lv.scrollTop = 0;
@@ -1665,14 +1708,14 @@
         badgeHtml = `<div class="list-card-badge ${b[0]}">${b[1]}</div>`;
       }
       // The progress bar takes the list colour, but turns green when full.
-      const fillColor = complete ? 'var(--green)' : list.color;
+      const fillColor = complete ? 'var(--green)' : listHex(list);
 
       const card = document.createElement('div');
       card.className = 'list-card';
       card.setAttribute('data-list-id', list.id);
       card.innerHTML = `
         <div class="card-inner">
-          <div class="list-card-stripe" style="background:${list.color}"></div>
+          <div class="list-card-stripe" style="background:${listHex(list)}"></div>
           <div class="list-card-body">
             <div class="list-card-head">
               <span class="list-card-name">${esc(list.name)}</span>
@@ -1712,7 +1755,7 @@
 
     const add = document.createElement('div');
     add.className = 'new-list-card';
-    add.textContent = '+ New list';
+    add.textContent = '+';
     add.addEventListener('click', () => openListModal(null));
     grid.appendChild(add);
   }
@@ -1871,7 +1914,7 @@
       onConfirm: () => {
         state.lists = state.lists.filter(l => l.id !== id);
         if (state.lists.length === 0) {
-          state.lists.push(newList('JotList', BRAND, []));
+          state.lists.push(newList('JotList', 0, []));
         }
         saveState();
         renderHome();
@@ -1883,13 +1926,13 @@
   function renderColorPicker() {
     const cp = document.getElementById('colorPicker');
     cp.innerHTML = '';
-    COLORS.forEach(c => {
+    state.palette.forEach((hex, i) => {
+      if (!state.paletteOn[i]) return;        // skip turned-off colours
       const sw = document.createElement('div');
-      sw.className = 'color-swatch' + (c.hex === pickedColor ? ' selected' : '');
-      sw.style.background = c.hex;
-      sw.title = c.name;
+      sw.className = 'color-swatch' + (i === pickedColor ? ' selected' : '');
+      sw.style.background = hex;
       sw.addEventListener('click', () => {
-        pickedColor = c.hex;
+        pickedColor = i;
         renderColorPicker();
         styleSaveBtn();
       });
@@ -1899,8 +1942,9 @@
 
   function styleSaveBtn() {
     const b = document.getElementById('listModalSave');
-    b.style.background = pickedColor;
-    b.style.color = isLight(pickedColor) ? '#2a2118' : '#fff';
+    const hex = state.palette[pickedColor] || state.palette[0];
+    b.style.background = hex;
+    b.style.color = isLight(hex) ? '#2a2118' : '#fff';
   }
 
   function openListModal(id) {
@@ -1908,7 +1952,8 @@
     const list = id ? getList(id) : null;
     document.getElementById('listModalTitle').textContent = list ? 'Edit list' : 'New list';
     document.getElementById('listNameField').value = list ? list.name : '';
-    pickedColor = list ? list.color : COLORS[0].hex;
+    pickedColor = (list && typeof list.color === 'number') ? list.color : 0;
+    if (!state.paletteOn[pickedColor]) pickedColor = 0;
     renderColorPicker();
     styleSaveBtn();
     document.getElementById('listModalOverlay').classList.add('open');
@@ -1930,7 +1975,7 @@
     saveState();
     closeListModal();
     if (activeListId) {
-      themeList(activeList().color);
+      themeList(listHex(activeList()));
       renderList();
     } else {
       renderHome();
@@ -2574,18 +2619,29 @@
     if (!ed) return;
     ed.innerHTML = '';
     state.palette.forEach((hex, i) => {
+      const on = state.paletteOn[i];
       const col = document.createElement('div');
-      col.className = 'palette-col';
+      col.className = 'palette-col' + (on ? '' : ' off');
       col.innerHTML =
         `<button class="palette-lock${paletteLocks[i] ? ' locked' : ''}" title="Lock this colour" aria-label="Lock colour">`
         + (paletteLocks[i] ? LOCK_CLOSED : LOCK_OPEN)
         + `</button>`
-        + `<div class="palette-swatch" style="background:${hex}"></div>`;
+        + `<div class="palette-swatch"${on ? ` style="background:${hex}"` : ''}></div>`
+        + (i === 0 ? ''
+            : `<button class="palette-del" title="${on ? 'Turn this colour off' : 'Turn it back on'}">${on ? '×' : '+'}</button>`);
       col.querySelector('.palette-lock').addEventListener('click', () => {
         paletteLocks[i] = !paletteLocks[i];
         renderPaletteEditor();
       });
-      col.querySelector('.palette-swatch').addEventListener('click', () => openHsl(i));
+      if (on) {
+        col.querySelector('.palette-swatch').addEventListener('click', () => openHsl(i));
+      }
+      const del = col.querySelector('.palette-del');
+      if (del) del.addEventListener('click', () => {
+        state.paletteOn[i] = !state.paletteOn[i];
+        saveState();
+        renderPaletteEditor();
+      });
       ed.appendChild(col);
     });
   }
@@ -2593,9 +2649,11 @@
   function commitPalette(next) {
     state.palette = next;
     saveState();
-    rebuildColors();
     applyPalette();
     renderPaletteEditor();
+    // Re-paint the live app so list cards / theming follow the new palette.
+    if (activeListId && activeList()) themeList(listHex(activeList()));
+    render();
   }
 
   function regeneratePalette() {
@@ -2604,6 +2662,7 @@
 
   function resetPalette() {
     paletteLocks = [false, false, false, false, false, false];
+    state.paletteOn = [true, true, true, true, true, true];
     commitPalette(DEFAULT_PALETTE.slice());
   }
 
@@ -2635,9 +2694,10 @@
     if (hslSlot >= 0) {
       state.palette[hslSlot] = hex;
       saveState();
-      rebuildColors();
       applyPalette();
       renderPaletteEditor();
+      if (activeListId && activeList()) themeList(listHex(activeList()));
+      render();
     }
   }
 
@@ -2877,13 +2937,9 @@
       if (error) return;
       if (data && data.state && Array.isArray(data.state.lists)) {
         adoptingCloud = true;
-        state = data.state;
-        if (!Array.isArray(state.palette) || state.palette.length !== 6) {
-          state.palette = DEFAULT_PALETTE.slice();
-        }
+        state = normalizeState(data.state);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
         adoptingCloud = false;
-        rebuildColors();
         applyPalette();
         activeListId = null;
         goHome();
@@ -2926,13 +2982,9 @@
           // ignore the echo of our own write, and no-op changes
           if (incJson === lastPushedJson || incJson === JSON.stringify(state)) return;
           adoptingCloud = true;
-          state = incoming;
-          if (!Array.isArray(state.palette) || state.palette.length !== 6) {
-            state.palette = DEFAULT_PALETTE.slice();
-          }
+          state = normalizeState(incoming);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
           adoptingCloud = false;
-          rebuildColors();
           applyPalette();
           render();
         })
