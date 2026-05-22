@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>JotList.io</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23c0392b'/%3E%3Cpolyline points='9,16.5 14,21.5 23,10.5' fill='none' stroke='%23ffffff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%23c0392b'/%3E%3Cpolyline points='9,16.5 14,21.5 23,10.5' fill='none' stroke='%23ffffff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -12,8 +12,20 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="JotList">
 <meta name="theme-color" content="#c0392b">
+<meta name="description" content="A fast checklist app — no login, no nonsense. Your lists, right in your browser.">
+<meta property="og:title" content="JotLists">
+<meta property="og:description" content="A fast checklist app — no login, no nonsense.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://jotlist.io">
+<meta property="og:image" content="https://jotlist.io/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://jotlist.io/og-image.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@700&display=swap');
+
   * {
     margin: 0;
     padding: 0;
@@ -72,12 +84,12 @@
 
   /* Dark mode — charcoal surfaces; brand colours stay on bars + highlights. */
   html.dark {
-    --surface: #26262c;
-    --surface-alt: #313139;
-    --text: #efe9e2;
-    --text-secondary: #9d958b;
-    --text-dim: #635f58;
-    --border-subtle: #3a3a42;
+    --surface: #2b2b34;
+    --surface-alt: #383843;
+    --text: #f7f3ed;
+    --text-secondary: #aca499;
+    --text-dim: #7a756c;
+    --border-subtle: #45454f;
     --green-soft: #21392b;
     --red-soft: #3c2622;
   }
@@ -108,7 +120,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     body, .card-inner, .list-card-badge,
-    .welcome-gear, .welcome-ripple { animation: none; }
+    .welcome-gear, .welcome-ripple, .welcome-mini-card { animation: none; }
     #listView { transition: none; }
   }
 
@@ -150,7 +162,8 @@
   }
 
   /* Extra room at the bottom so cards never hide behind the pinned footer. */
-  #homeView .view-inner { padding-bottom: calc(116px + env(safe-area-inset-bottom, 0px)); }
+  /* Generous bottom room so the lowest cards can scroll well up the screen. */
+  #homeView .view-inner { padding-bottom: calc(45vh + env(safe-area-inset-bottom, 0px)); }
 
   /* Settings gear + version, pinned to the bottom of the window on the home
      screen. It sits inside #homeView so the list view slides cleanly over it. */
@@ -171,9 +184,26 @@
   /* Header */
   .header {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
     margin-bottom: 24px;
+  }
+
+  /* Site logo — the JotLists wordmark, monochrome so it always has
+     contrast on the coloured / charcoal background. */
+  .logo {
+    height: 34px;
+    width: 116px;
+    display: block;
+    overflow: visible;
+    color: var(--on-bg);
+    flex-shrink: 0;
+  }
+
+  .logo-wm {
+    font-family: 'Poppins', system-ui, -apple-system, sans-serif;
+    font-weight: 700;
+    font-size: 168px;
   }
 
   .header h1 {
@@ -285,6 +315,110 @@
 
   .list-grid.reordering .list-card:hover { transform: none; }
 
+  /* A 2x2 card — fills its grid area (square by construction) */
+  .list-card.big {
+    grid-column: span 2;
+    grid-row: span 2;
+    aspect-ratio: auto;
+  }
+
+  /* Corner resize handle */
+  .card-resize {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 28px;
+    height: 28px;
+    z-index: 4;
+    cursor: nwse-resize;
+    touch-action: none;
+  }
+
+  .card-resize::after {
+    content: '';
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    width: 9px;
+    height: 9px;
+    border-right: 2.5px solid color-mix(in srgb, var(--text-secondary) 65%, transparent);
+    border-bottom: 2.5px solid color-mix(in srgb, var(--text-secondary) 65%, transparent);
+    border-bottom-right-radius: 3px;
+  }
+
+  /* On hover-capable devices the grip only shows on hover; touch keeps it
+     but very faint. */
+  @media (hover: hover) {
+    .card-resize::after { opacity: 0; transition: opacity 0.13s; }
+    .list-card:hover .card-resize::after { opacity: 1; }
+  }
+  @media (hover: none) {
+    .card-resize::after { opacity: 0.3; }
+  }
+
+  /* Ghost slots shown while a card is being resized or reordered —
+     faint rounded placeholders, one per grid cell. */
+  .list-grid.resizing,
+  .list-grid.reordering {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Crect x='1.5' y='1.5' width='90' height='90' rx='7' fill='rgba(255,255,255,0.05)' stroke='rgba(255,255,255,0.3)' stroke-width='1.6'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+  }
+
+  /* Task preview inside a 2x2 card */
+  .card-preview {
+    flex: 1;
+    min-height: 0;
+    margin: 9px 0 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .card-preview-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+  }
+
+  .card-preview-box {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--text-dim);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    transition: background 0.15s, border-color 0.15s;
+  }
+
+  .card-preview-box svg { width: 9px; height: 9px; opacity: 0; }
+
+  .card-preview-item.done .card-preview-box {
+    background: var(--green);
+    border-color: var(--green);
+  }
+
+  .card-preview-item.done .card-preview-box svg { opacity: 1; }
+
+  .card-preview-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .card-preview-item.done .card-preview-text {
+    text-decoration: line-through;
+    color: var(--text-dim);
+  }
+
+  .card-preview-empty { font-size: 0.82rem; color: var(--text-dim); }
+
   .list-card-stripe { height: 6px; width: 100%; flex-shrink: 0; }
 
   .list-card-body {
@@ -340,8 +474,8 @@
     position: fixed;
     z-index: 95;
     display: none;
-    flex-direction: column;
-    min-width: 150px;
+    flex-direction: row;
+    gap: 2px;
     background: var(--surface);
     border-radius: var(--radius-sm);
     box-shadow: 0 10px 30px rgba(0,0,0,0.26);
@@ -353,12 +487,12 @@
   .card-menu-item {
     background: none;
     border: none;
-    font-family: inherit;
-    font-size: 0.84rem;
-    font-weight: 600;
-    text-align: left;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     color: var(--text);
-    padding: 10px 12px;
     border-radius: var(--radius-xs);
     cursor: pointer;
     transition: background 0.1s;
@@ -1141,7 +1275,74 @@
   .account-btn.google svg { width: 17px; height: 17px; flex-shrink: 0; }
 
   /* First-visit welcome */
-  .welcome-modal { max-width: 360px; text-align: center; }
+  .welcome-modal { max-width: 360px; overflow: hidden; padding-left: 0; padding-right: 0; }
+
+  /* Two pages on a sliding track. */
+  .welcome-track {
+    display: flex;
+    width: 300%;
+    transition: transform 0.34s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .welcome-track[data-page="2"] { transform: translateX(-33.3333%); }
+  .welcome-track[data-page="3"] { transform: translateX(-66.6667%); }
+  .welcome-page {
+    width: 33.3333%;
+    flex-shrink: 0;
+    text-align: center;
+    padding: 0 22px;
+  }
+
+  .welcome-install-demo {
+    height: 104px;
+    margin: 4px auto 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .welcome-app-icon {
+    width: 66px;
+    height: 66px;
+    border-radius: 16px;
+    background: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 22px rgba(0,0,0,0.3);
+  }
+  .welcome-app-icon svg { width: 34px; height: 34px; }
+  .welcome-install { width: 100%; margin: 2px 0 4px; }
+
+  /* Page 2 — the resize visual aid: a tile that grows and shrinks. */
+  .welcome-resize-demo {
+    height: 104px;
+    margin: 4px auto 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .welcome-mini-card {
+    position: relative;
+    width: 48px;
+    height: 48px;
+    border-radius: 9px;
+    background: var(--accent);
+    animation: welcomeGrow 2.6s ease-in-out infinite;
+  }
+  .welcome-mini-card::after {
+    content: '';
+    position: absolute;
+    right: 5px;
+    bottom: 5px;
+    width: 8px;
+    height: 8px;
+    border-right: 2.5px solid rgba(255,255,255,0.85);
+    border-bottom: 2.5px solid rgba(255,255,255,0.85);
+  }
+  @keyframes welcomeGrow {
+    0%, 26% { width: 48px; height: 48px; }
+    58%, 84% { width: 96px; height: 96px; }
+    100% { width: 48px; height: 48px; }
+  }
 
   .welcome-gear-demo {
     position: relative;
@@ -1198,6 +1399,31 @@
 
   .welcome-body strong { color: var(--text); }
   .welcome-btn { margin-top: 8px; }
+
+  /* Feedback form */
+  .feedback-intro {
+    font-size: 0.84rem;
+    line-height: 1.45;
+    color: var(--text-secondary);
+    margin-bottom: 13px;
+  }
+  .feedback-text,
+  .feedback-email {
+    width: 100%;
+    font: inherit;
+    font-size: 0.88rem;
+    color: var(--text);
+    background: var(--surface-alt);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+  }
+  .feedback-text { resize: vertical; min-height: 96px; margin-bottom: 10px; }
+  .feedback-email { margin-bottom: 4px; }
+  .feedback-text:focus,
+  .feedback-email:focus { outline: none; border-color: var(--accent); }
+  .feedback-text::placeholder,
+  .feedback-email::placeholder { color: var(--text-dim); }
 
   .overlay {
     position: fixed;
@@ -1395,7 +1621,20 @@
 <!-- HOME VIEW -->
 <div class="view" id="homeView"><div class="view-inner">
   <div class="header">
-    <h1>JotLists</h1>
+    <svg class="logo" viewBox="0 0 610 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="JotLists">
+      <defs>
+        <mask id="logoCheck">
+          <rect x="-200" y="-200" width="1010" height="600" fill="#fff"/>
+          <path d="M142 100 L157 114 L186 79" fill="none" stroke="#000"
+                stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+        </mask>
+      </defs>
+      <g fill="currentColor" mask="url(#logoCheck)">
+        <text class="logo-wm" x="120" y="143" text-anchor="end">J</text>
+        <circle cx="163" cy="98" r="46"/>
+        <text class="logo-wm" x="210" y="143" letter-spacing="-7">tLists</text>
+      </g>
+    </svg>
     <div class="header-right">
       <div class="account-email" id="accountEmail"></div>
       <div class="count" id="listCount"></div>
@@ -1468,6 +1707,7 @@
       <button class="palette-btn" onclick="resetPalette()">Set to Default</button>
       <button class="palette-btn" onclick="regeneratePalette()">Generate New</button>
     </div>
+    <button class="palette-btn settings-apply" onclick="openFeedback()">Submit feedback</button>
     <button class="palette-btn primary settings-apply" onclick="closeSettings()">Apply</button>
   </div>
 </div>
@@ -1502,14 +1742,48 @@
 <!-- FIRST-VISIT WELCOME -->
 <div class="overlay" id="welcomeOverlay">
   <div class="modal welcome-modal">
-    <div class="welcome-gear-demo">
-      <span class="welcome-ripple"></span>
-      <span class="welcome-gear"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.3"/><path d="M12 2v3.2M12 18.8V22M22 12h-3.2M5.2 12H2M19.07 4.93l-2.26 2.26M7.19 16.81l-2.26 2.26M19.07 19.07l-2.26-2.26M7.19 7.19L4.93 4.93"/></svg></span>
+    <div class="welcome-track" id="welcomeTrack">
+      <div class="welcome-page">
+        <div class="welcome-gear-demo">
+          <span class="welcome-ripple"></span>
+          <span class="welcome-gear"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.3"/><path d="M12 2v3.2M12 18.8V22M22 12h-3.2M5.2 12H2M19.07 4.93l-2.26 2.26M7.19 16.81l-2.26 2.26M19.07 19.07l-2.26-2.26M7.19 7.19L4.93 4.93"/></svg></span>
+        </div>
+        <h2 class="welcome-title">Welcome to JotList</h2>
+        <p class="welcome-body">No sign-up, no email. Your lists live right here in this&nbsp;browser.</p>
+        <p class="welcome-body">Want them on every device? Tap the <strong>gear</strong> to sign&nbsp;in.</p>
+        <button class="palette-btn primary welcome-btn" onclick="welcomeNext()">Next</button>
+      </div>
+      <div class="welcome-page">
+        <div class="welcome-resize-demo"><span class="welcome-mini-card"></span></div>
+        <h2 class="welcome-title">Arrange your lists</h2>
+        <p class="welcome-body">Drag a card's <strong>corner</strong> to blow it up to a 2×2 tile that shows its&nbsp;tasks.</p>
+        <p class="welcome-body"><strong>Press and hold</strong> a card to drag it somewhere&nbsp;new.</p>
+        <button class="palette-btn primary welcome-btn" onclick="welcomeNext()">Next</button>
+      </div>
+      <div class="welcome-page">
+        <div class="welcome-install-demo">
+          <span class="welcome-app-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="5,12.5 10,17.5 19,7"/></svg></span>
+        </div>
+        <h2 class="welcome-title">Get the app</h2>
+        <p class="welcome-body">Add JotList to your home screen. It opens full-screen, just like a real&nbsp;app.</p>
+        <div id="installArea"></div>
+        <button class="palette-btn primary welcome-btn" onclick="closeWelcome()">Start jotting</button>
+      </div>
     </div>
-    <h2 class="welcome-title">Welcome to JotList</h2>
-    <p class="welcome-body">No sign-up. No email. No nonsense. Your lists live right here in this browser — private to this device.</p>
-    <p class="welcome-body">Want them on your phone <em>and</em> your laptop? Tap the <strong>gear</strong> and sign in. That's the only reason to.</p>
-    <button class="palette-btn primary welcome-btn" onclick="closeWelcome()">Start jotting</button>
+  </div>
+</div>
+
+<!-- FEEDBACK -->
+<div class="overlay" id="feedbackOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Send feedback</span>
+      <button class="modal-close" onclick="closeFeedback()" title="Close">×</button>
+    </div>
+    <p class="feedback-intro">Found a bug or have an idea? It goes straight to the team.</p>
+    <textarea id="feedbackText" class="feedback-text" placeholder="What's on your mind?"></textarea>
+    <input type="email" id="feedbackEmail" class="feedback-email" placeholder="Your email (optional, for a reply)">
+    <button class="palette-btn primary settings-apply" onclick="sendFeedback()">Send</button>
   </div>
 </div>
 
@@ -1548,8 +1822,12 @@
 
 <!-- LIST CARD ⋯ MENU -->
 <div class="card-menu" id="cardMenu">
-  <button class="card-menu-item" data-act="edit">Edit list</button>
-  <button class="card-menu-item danger" data-act="del">Delete list</button>
+  <button class="card-menu-item" data-act="edit" title="Edit list" aria-label="Edit list">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4.5L20 8.5 15.5 4 4 15.5V20z"/><path d="M13.5 6l4.5 4.5"/></svg>
+  </button>
+  <button class="card-menu-item danger" data-act="del" title="Delete list" aria-label="Delete list">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+  </button>
 </div>
 
 <script>
@@ -1583,12 +1861,20 @@
         const idx = st.palette.indexOf(l.color);
         l.color = idx >= 0 ? idx : 0;
       }
+      if (l.size !== 2) l.size = 1;
     });
     return st;
   }
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.6.0', date: '2026-05-21', changes: [
+      'Resize a list card — drag the corner to a 2×2 tile that shows its tasks',
+      'Tick tasks off straight from a big card',
+      'Dark mode — toggle it in Settings',
+      'A fresh JotLists logo',
+      'Send feedback right from Settings',
+    ]},
     { version: '1.5.0', date: '2026-05-21', changes: [
       'Sign in with Google — save your lists and sync them across devices',
       'Palette changes now recolour the whole app instantly',
@@ -1794,7 +2080,7 @@
 
   // Theme the list view to one color. --accent is a version readable on white.
   // Dark mode: a charcoal backdrop; brand colours stay on bars + highlights.
-  const DARK_BG = 'linear-gradient(150deg, #1c1c21, #2c2c34, #232329, #1c1c21)';
+  const DARK_BG = 'linear-gradient(150deg, #0e0e12, #18181f, #121216, #0e0e12)';
 
   function applyDark() {
     document.documentElement.classList.toggle('dark', !!state.dark);
@@ -1909,8 +2195,19 @@
       // The progress bar takes the list colour, but turns green when full.
       const fillColor = complete ? 'var(--green)' : listHex(list);
 
+      const big = list.size === 2;
+      let previewHtml = '';
+      if (big) {
+        const items = list.todos.slice(0, 6).map(t =>
+          `<div class="card-preview-item" data-task="${t.id}">`
+          + `<span class="card-preview-box"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6 5,9 10,3"/></svg></span>`
+          + `<span class="card-preview-text">${esc(t.text)}</span></div>`).join('');
+        previewHtml = `<div class="card-preview">${items
+          || '<div class="card-preview-empty">No tasks yet</div>'}</div>`;
+      }
+
       const card = document.createElement('div');
-      card.className = 'list-card';
+      card.className = 'list-card' + (big ? ' big' : '');
       card.setAttribute('data-list-id', list.id);
       card.innerHTML = `
         <div class="card-inner">
@@ -1923,6 +2220,7 @@
               </div>
             </div>
             <div class="list-card-counts">${open} open${done ? ' · ' + done + ' done' : ''}</div>
+            ${previewHtml}
             <div class="list-card-foot">
               ${badgeHtml}
               <div class="list-card-progress">
@@ -1930,21 +2228,35 @@
               </div>
             </div>
           </div>
+          <div class="card-resize" title="Drag to resize"></div>
         </div>`;
 
       card.querySelector('[data-act="menu"]').addEventListener('click', e => {
         e.stopPropagation();
         openCardMenu(list.id, e.currentTarget);
       });
+      attachCardResize(card.querySelector('.card-resize'), list);
+
+      // The 2x2 preview is live — tap a task to check it off.
+      card.querySelectorAll('.card-preview-item').forEach(it => {
+        it.addEventListener('click', e => {
+          e.stopPropagation();
+          if (it.classList.contains('done')) return;
+          it.classList.add('done');
+          setTimeout(() => completeFromCard(list.id, it.getAttribute('data-task')), 260);
+        });
+      });
 
       // Tap opens the list; press-and-hold starts a drag-reorder.
       card.addEventListener('touchstart', e => {
-        if (e.touches.length !== 1 || e.target.closest('.card-icon-btn')) return;
+        if (e.touches.length !== 1 || e.target.closest('.card-icon-btn')
+            || e.target.closest('.card-resize') || e.target.closest('.card-preview-item')) return;
         lastHomeTouch = Date.now();
         homePressStart(list.id, card, e.touches[0].clientX, e.touches[0].clientY);
       }, { passive: true });
       card.addEventListener('mousedown', e => {
-        if (e.button !== 0 || e.target.closest('.card-icon-btn')) return;
+        if (e.button !== 0 || e.target.closest('.card-icon-btn')
+            || e.target.closest('.card-resize') || e.target.closest('.card-preview-item')) return;
         if (Date.now() - lastHomeTouch < 800) return;
         homePressStart(list.id, card, e.clientX, e.clientY);
       });
@@ -1957,6 +2269,89 @@
     add.textContent = '+';
     add.addEventListener('click', () => openListModal(null));
     grid.appendChild(add);
+    sizeGrid();
+  }
+
+  // --- Resizable cards -----------------------------------------------------
+  // Square the grid's rows to the column width, so a 2x2 card stays square.
+  function sizeGrid() {
+    const grid = document.getElementById('listGrid');
+    if (!grid || !grid.clientWidth) return;
+    const cols = window.matchMedia('(min-width: 720px)').matches ? 4 : 2;
+    const gap = parseFloat(getComputedStyle(grid).columnGap) || 10;
+    const cell = (grid.clientWidth - gap * (cols - 1)) / cols;
+    if (cell > 0) {
+      grid.style.gridAutoRows = cell + 'px';
+      grid.dataset.cell = cell;
+      grid.dataset.gap = gap;
+    }
+  }
+
+  let resizeState = null;
+
+  function attachCardResize(handle, list) {
+    if (!handle) return;
+    handle.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      const grid = document.getElementById('listGrid');
+      const cell = parseFloat(grid.dataset.cell) || 160;
+      const gap = parseFloat(grid.dataset.gap) || 10;
+      resizeState = { list, card: handle.closest('.list-card'), x0: e.clientX, y0: e.clientY, cell };
+      grid.classList.add('resizing');
+      grid.style.backgroundSize = (cell + gap) + 'px ' + (cell + gap) + 'px';
+      document.addEventListener('pointermove', onResizeMove);
+      document.addEventListener('pointerup', onResizeEnd);
+      document.addEventListener('pointercancel', onResizeEnd);
+    });
+  }
+
+  function onResizeMove(e) {
+    if (!resizeState) return;
+    const { card, cell } = resizeState;
+    const reach = Math.max(e.clientX - resizeState.x0, e.clientY - resizeState.y0);
+    const isBig = card.classList.contains('big');
+    let want = isBig;
+    if (!isBig && reach > cell * 0.4) want = true;
+    if (isBig && reach < -cell * 0.4) want = false;
+    if (want !== isBig) {
+      // Toggle the span and let the other cards glide to their new spots.
+      flipMove(() => card.classList.toggle('big', want));
+    }
+  }
+
+  function onResizeEnd() {
+    if (!resizeState) return;
+    const { list, card } = resizeState;
+    const grid = document.getElementById('listGrid');
+    grid.classList.remove('resizing');
+    grid.style.backgroundSize = '';
+    document.removeEventListener('pointermove', onResizeMove);
+    document.removeEventListener('pointerup', onResizeEnd);
+    document.removeEventListener('pointercancel', onResizeEnd);
+    const finalSize = card.classList.contains('big') ? 2 : 1;
+    resizeState = null;
+    if ((list.size || 1) !== finalSize) {
+      list.size = finalSize;
+      saveState();
+      renderHome();   // rebuild so the card gains / loses its task preview
+    }
+  }
+
+  window.addEventListener('resize', () => { if (!activeListId) sizeGrid(); });
+
+  // Check a task off straight from a 2x2 card's preview.
+  function completeFromCard(listId, taskId) {
+    const list = getList(listId);
+    if (!list) return;
+    const tid = Number(taskId);
+    const idx = list.todos.findIndex(t => t.id === tid);
+    if (idx < 0) return;
+    const task = list.todos.splice(idx, 1)[0];
+    if (!Array.isArray(list.completed)) list.completed = [];
+    list.completed.unshift({ id: uid(), text: task.text, at: new Date().toISOString() });
+    saveState();
+    renderHome();
   }
 
   // --- Home cards: tap to open, press-and-hold to drag-reorder -------------
@@ -2013,7 +2408,11 @@
     document.body.appendChild(clone);
     card.classList.remove('pressing');
     card.classList.add('dragging');
-    document.getElementById('listGrid').classList.add('reordering');
+    const rg = document.getElementById('listGrid');
+    rg.classList.add('reordering');
+    rg.style.backgroundSize = ((parseFloat(rg.dataset.cell) || 160)
+      + (parseFloat(rg.dataset.gap) || 10)) + 'px ' + ((parseFloat(rg.dataset.cell) || 160)
+      + (parseFloat(rg.dataset.gap) || 10)) + 'px';
     homeDrag = { id, source: card, clone, grabX: x - rect.left, grabY: y - rect.top,
                  lastOver: null, cooldownUntil: 0 };
     moveHomeDrag(x, y);
@@ -2068,6 +2467,7 @@
     clone.remove();
     const grid = document.getElementById('listGrid');
     grid.classList.remove('reordering');
+    grid.style.backgroundSize = '';
     if (commit !== false) {
       const order = [...grid.querySelectorAll('.list-card')]
         .map(c => Number(c.getAttribute('data-list-id')));
@@ -2957,6 +3357,10 @@
     if (e.target.id === 'welcomeOverlay') closeWelcome();
   });
 
+  document.getElementById('feedbackOverlay').addEventListener('click', e => {
+    if (e.target.id === 'feedbackOverlay') closeFeedback();
+  });
+
   document.querySelectorAll('#cardMenu .card-menu-item').forEach(btn => {
     btn.addEventListener('click', () => {
       const act = btn.dataset.act, id = cardMenuListId;
@@ -2987,7 +3391,7 @@
   });
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeWelcome(); closeHsl(); closeChangelog(); closeSettings(); closeListModal(); closeConfirm(); closeCardMenu(); }
+    if (e.key === 'Escape') { closeFeedback(); closeWelcome(); closeHsl(); closeChangelog(); closeSettings(); closeListModal(); closeConfirm(); closeCardMenu(); }
   });
 
   // Swipe a list to the right to slide back to all lists.
@@ -3253,9 +3657,70 @@
     document.getElementById('welcomeOverlay').classList.add('open');
   }
 
+  let welcomePage = 1;
+  function welcomeNext() {
+    welcomePage = Math.min(3, welcomePage + 1);
+    document.getElementById('welcomeTrack').dataset.page = welcomePage;
+    if (welcomePage === 3) renderInstallArea();
+  }
+
+  // --- Install as an app (PWA) --------------------------------------------
+  let deferredPrompt = null;
+
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredPrompt = e;
+    renderInstallArea();
+  });
+
+  function renderInstallArea() {
+    const el = document.getElementById('installArea');
+    if (!el) return;
+    const installed = window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone;
+    if (installed) {
+      el.innerHTML = `<p class="welcome-body">All set. JotList is on your home&nbsp;screen.</p>`;
+    } else if (deferredPrompt) {
+      el.innerHTML = `<button class="palette-btn primary welcome-install" id="installBtn">Add to Home Screen</button>`;
+      el.querySelector('#installBtn').addEventListener('click', installApp);
+    } else {
+      el.innerHTML = `<p class="welcome-body">On iPhone: tap the <strong>Share</strong> button, then <strong>Add to Home&nbsp;Screen</strong>.</p>`;
+    }
+  }
+
+  async function installApp() {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    try { await deferredPrompt.userChoice; } catch (e) {}
+    deferredPrompt = null;
+    renderInstallArea();
+  }
+
   function closeWelcome() {
     localStorage.setItem(WELCOME_KEY, '1');
     document.getElementById('welcomeOverlay').classList.remove('open');
+  }
+
+  // --- Feedback ------------------------------------------------------------
+  function openFeedback() {
+    document.getElementById('feedbackText').value = '';
+    document.getElementById('feedbackEmail').value = '';
+    document.getElementById('feedbackOverlay').classList.add('open');
+  }
+
+  function closeFeedback() {
+    document.getElementById('feedbackOverlay').classList.remove('open');
+  }
+
+  function sendFeedback() {
+    const msg = document.getElementById('feedbackText').value.trim();
+    if (!msg) { closeFeedback(); return; }
+    const from = document.getElementById('feedbackEmail').value.trim();
+    const body = msg + (from ? '\n\nReply to: ' + from : '');
+    location.href = 'mailto:info@twoseam.com'
+      + '?subject=' + encodeURIComponent('JotList feedback')
+      + '&body=' + encodeURIComponent(body);
+    closeFeedback();
   }
 
   applyDark();
@@ -3263,6 +3728,10 @@
   goHome();
   initSupa();
   maybeWelcome();
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
 </script>
 </body>
 </html>

@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 610 200" fill="none">
+  <!--
+    JotLists wordmark — DRAFT.
+    Letters use Poppins (clean geometric) as a stand-in until the real
+    reference font arrives; then convert the wordmark to outlined <path>s
+    so it needs no font. The "o" is the brand check-circle, positioned
+    with fixed gaps so spacing is controlled, not font-guessed.
+  -->
+  <defs>
+    <linearGradient id="jl-red" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d9493a"/>
+      <stop offset="1" stop-color="#bb3322"/>
+    </linearGradient>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@700&amp;display=swap');
+      .wm {
+        font-family: 'Poppins', system-ui, -apple-system, sans-serif;
+        font-weight: 700;
+        font-size: 168px;
+      }
+    </style>
+  </defs>
+
+  <!-- "J" — anchored by its right edge so the circle always sits just after it -->
+  <text class="wm" x="120" y="143" text-anchor="end" fill="url(#jl-red)">J</text>
+
+  <!-- the check-circle "o" — sized to the lowercase x-height -->
+  <circle cx="163" cy="98" r="46" fill="url(#jl-red)"/>
+  <path d="M142 100 L157 114 L186 79" fill="none" stroke="#ffffff"
+        stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- "tLists" -->
+  <text class="wm" x="210" y="143" fill="url(#jl-red)" letter-spacing="-7">tLists</text>
+</svg>
