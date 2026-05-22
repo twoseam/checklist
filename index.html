@@ -70,6 +70,18 @@
     --radius-xs: 3px;
   }
 
+  /* Dark mode — charcoal surfaces; brand colours stay on bars + highlights. */
+  html.dark {
+    --surface: #26262c;
+    --surface-alt: #313139;
+    --text: #efe9e2;
+    --text-secondary: #9d958b;
+    --text-dim: #635f58;
+    --border-subtle: #3a3a42;
+    --green-soft: #21392b;
+    --red-soft: #3c2622;
+  }
+
   html {
     height: 100%;
     overflow: hidden;
@@ -174,11 +186,28 @@
   h1.editable { cursor: pointer; }
   h1.editable:hover { opacity: 0.85; }
 
+  .header-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
+  }
+
   .header .count {
     font-size: 0.75rem;
     color: color-mix(in srgb, var(--on-bg) 60%, transparent);
     font-variant-numeric: tabular-nums;
     font-weight: 500;
+  }
+
+  .header .account-email {
+    font-size: 0.72rem;
+    color: color-mix(in srgb, var(--on-bg) 50%, transparent);
+    font-weight: 500;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* Back button */
@@ -840,7 +869,6 @@
 
   /* Settings gear */
   .settings-btn {
-    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -853,19 +881,6 @@
     color: var(--on-bg);
     cursor: pointer;
     transition: background 0.15s, transform 0.25s ease;
-  }
-
-  /* A small green dot on the gear when signed in — your lists are synced. */
-  .settings-btn.synced::after {
-    content: '';
-    position: absolute;
-    top: 2px;
-    right: 2px;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: var(--green);
-    box-shadow: 0 0 0 2.5px var(--surface);
   }
 
   .settings-btn:hover {
@@ -1051,6 +1066,48 @@
     background: var(--border-subtle);
     margin: 0 0 18px;
   }
+
+  .settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px;
+  }
+
+  .settings-row-label {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .dark-toggle {
+    position: relative;
+    width: 46px;
+    height: 27px;
+    border-radius: 14px;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    background: var(--border-subtle);
+    transition: background 0.16s;
+  }
+
+  .dark-toggle.on { background: var(--accent); }
+
+  .dark-toggle::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 21px;
+    height: 21px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    transition: transform 0.16s;
+  }
+
+  .dark-toggle.on::after { transform: translateX(19px); }
 
   .account-note,
   .account-who {
@@ -1339,7 +1396,10 @@
 <div class="view" id="homeView"><div class="view-inner">
   <div class="header">
     <h1>JotLists</h1>
-    <div class="count" id="listCount"></div>
+    <div class="header-right">
+      <div class="account-email" id="accountEmail"></div>
+      <div class="count" id="listCount"></div>
+    </div>
   </div>
   <div class="list-grid" id="listGrid"></div>
   </div>
@@ -1395,6 +1455,11 @@
       <span class="modal-title">Settings</span>
       <button class="modal-close" onclick="closeSettings()" title="Close">×</button>
     </div>
+    <div class="settings-row">
+      <span class="settings-row-label">Dark mode</span>
+      <button class="dark-toggle" id="darkToggle" onclick="toggleDark()" aria-label="Toggle dark mode"></button>
+    </div>
+    <div class="settings-divider"></div>
     <div class="account-box" id="accountBox"></div>
     <div class="settings-divider"></div>
     <div class="settings-label">Site palette</div>
@@ -1512,6 +1577,7 @@
       st.paletteOn = [true, true, true, true, true, true];
     }
     st.paletteOn[0] = true;  // slot 1 can never be turned off
+    if (typeof st.dark !== 'boolean') st.dark = false;
     st.lists.forEach(l => {
       if (typeof l.color !== 'number') {
         const idx = st.palette.indexOf(l.color);
@@ -1727,8 +1793,37 @@
   }
 
   // Theme the list view to one color. --accent is a version readable on white.
+  // Dark mode: a charcoal backdrop; brand colours stay on bars + highlights.
+  const DARK_BG = 'linear-gradient(150deg, #1c1c21, #2c2c34, #232329, #1c1c21)';
+
+  function applyDark() {
+    document.documentElement.classList.toggle('dark', !!state.dark);
+    const dt = document.getElementById('darkToggle');
+    if (dt) dt.classList.toggle('on', !!state.dark);
+  }
+
+  function toggleDark() {
+    state.dark = !state.dark;
+    applyDark();
+    saveState();
+    if (activeListId && activeList()) themeList(listHex(activeList()));
+    else themeHome();
+  }
+
   function themeList(color) {
     const lv = document.getElementById('listView');
+    if (state.dark) {
+      // Charcoal background; the list's colour kept only as the accent.
+      document.documentElement.style.setProperty('--app-bg', DARK_BG);
+      lv.style.setProperty('--list-bg', DARK_BG);
+      lv.style.setProperty('--accent', color);
+      lv.style.setProperty('--accent-hover', shade(color, 0.12));
+      lv.style.setProperty('--accent-soft', color + '24');
+      lv.style.setProperty('--border', color);
+      lv.style.setProperty('--border-light', color + '33');
+      lv.style.setProperty('--on-bg', '#efe9e2');
+      return;
+    }
     const light = isLight(color);
     const ink = light ? shade(color, -0.5) : color;
     document.documentElement.style.setProperty('--app-bg', color);
@@ -1744,9 +1839,11 @@
   // Theme the home view to the blend of all list colors.
   function themeHome() {
     const first = state.lists[0];
-    document.documentElement.style.setProperty('--app-bg', homeGradient());
+    document.documentElement.style.setProperty('--app-bg',
+      state.dark ? DARK_BG : homeGradient());
     document.getElementById('homeView').style.setProperty('--on-bg',
-      first && isLight(listHex(first)) ? '#2a2118' : '#fff');
+      state.dark ? '#efe9e2'
+        : (first && isLight(listHex(first)) ? '#2a2118' : '#fff'));
   }
 
   // Home backdrop: a soft gradient of the lists' own colors. The body slowly
@@ -3047,6 +3144,7 @@
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
         adoptingCloud = false;
         applyPalette();
+        applyDark();
         activeListId = null;
         goHome();
       } else {
@@ -3092,6 +3190,8 @@
           localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
           adoptingCloud = false;
           applyPalette();
+          applyDark();
+          if (activeListId && activeList()) themeList(listHex(activeList()));
           render();
         })
       .subscribe();
@@ -3128,8 +3228,8 @@
   }
 
   function renderAccount() {
-    const sb = document.getElementById('settingsBtn');
-    if (sb) sb.classList.toggle('synced', !!authUser);
+    const em = document.getElementById('accountEmail');
+    if (em) em.textContent = authUser ? (authUser.email || '') : '';
     const box = document.getElementById('accountBox');
     if (!box) return;
     if (authUser) {
@@ -3158,6 +3258,7 @@
     document.getElementById('welcomeOverlay').classList.remove('open');
   }
 
+  applyDark();
   renderVersion();
   goHome();
   initSupa();
