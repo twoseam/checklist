@@ -587,6 +587,34 @@
   .task-menu-item.danger:hover { background: var(--red-soft); }
   .task-menu-item svg { flex-shrink: 0; }
 
+  /* Undo / redo buttons — a keyboard-free way to step back */
+  .history-controls {
+    position: fixed;
+    left: calc(14px + env(safe-area-inset-left, 0px));
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    z-index: 60;
+    display: flex;
+    gap: 8px;
+  }
+
+  .history-btn {
+    width: 46px;
+    height: 46px;
+    border: none;
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--accent);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.28);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.1s;
+  }
+
+  .history-btn:active { transform: scale(0.88); }
+  .history-btn[hidden] { display: none; }
+
   .list-card-counts {
     font-size: 0.72rem;
     color: var(--text-secondary);
@@ -2003,6 +2031,16 @@
   </button>
 </div>
 
+<!-- UNDO / REDO BUTTONS (keyboard-free) -->
+<div class="history-controls" id="historyControls">
+  <button class="history-btn" id="undoBtn" title="Undo" aria-label="Undo" hidden>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12H8"/></svg>
+  </button>
+  <button class="history-btn" id="redoBtn" title="Redo" aria-label="Redo" hidden>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h6"/></svg>
+  </button>
+</div>
+
 <script>
   const STORAGE_KEY = 'checklist_data';
   // The browser's own lists. Written ONLY while signed out, so it can never
@@ -2041,6 +2079,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.11.1', date: '2026-05-22', changes: [
+      'Undo and redo buttons, so it works without a keyboard',
+    ]},
     { version: '1.11.0', date: '2026-05-22', changes: [
       'Undo and redo anything with Cmd+Z and Shift+Cmd+Z',
     ]},
@@ -2253,6 +2294,16 @@
     history = [JSON.stringify(state)];
     historyIndex = 0;
     lastSnapAt = Date.now();
+    updateHistoryButtons();
+  }
+
+  // Show the undo / redo buttons only when there is somewhere to go.
+  function updateHistoryButtons() {
+    const u = document.getElementById('undoBtn');
+    const r = document.getElementById('redoBtn');
+    if (!u || !r) return;
+    u.hidden = historyIndex <= 0;
+    r.hidden = historyIndex >= history.length - 1;
   }
 
   // Record a snapshot after a change. A rapid burst (e.g. dragging a colour
@@ -2271,6 +2322,7 @@
       historyIndex = history.length - 1;
     }
     lastSnapAt = now;
+    updateHistoryButtons();
   }
 
   function undo() {
@@ -2303,6 +2355,7 @@
       renderHome();
     }
     restoringHistory = false;
+    updateHistoryButtons();
   }
 
   function getList(id) { return state.lists.find(l => l.id === id); }
@@ -3875,6 +3928,9 @@
       else if (act === 'del') deleteTask(id);
     });
   });
+
+  document.getElementById('undoBtn').addEventListener('click', undo);
+  document.getElementById('redoBtn').addEventListener('click', redo);
 
   document.addEventListener('click', e => {
     const menu = document.getElementById('cardMenu');
