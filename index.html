@@ -752,8 +752,15 @@
   .task-item.dragging { opacity: 0.2; }
   .task-item.drag-over { box-shadow: inset 0 2px 0 0 var(--accent); }
 
-  /* Touch press-and-hold reorder: source row leaves a gap, clone follows finger. */
-  .task-item.task-dragging { opacity: 0; }
+  /* Touch press-and-hold reorder: the dragged row becomes a visible landing
+     slot (its content hides, a tinted placeholder stays) so you can see
+     where it will drop as the other rows slide aside. The clone follows the
+     finger. */
+  .task-item.task-dragging {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+  }
+  .task-item.task-dragging .task-face,
+  .task-item.task-dragging .task-action-bg { opacity: 0; }
   .task-item.task-lifted {
     position: fixed;
     margin: 0;
@@ -2096,6 +2103,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.13.5', date: '2026-05-22', changes: [
+      'Dragging a task shows a slot where it will land',
+    ]},
     { version: '1.13.4', date: '2026-05-22', changes: [
       'Sign-in no longer offers to add an empty starter list',
     ]},
