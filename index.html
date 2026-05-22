@@ -391,6 +391,35 @@
     gap: 6px;
   }
 
+  /* Scrollable-but-clipped task list inside a 2x2 card */
+  .card-preview-list {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  /* Add-a-task row pinned to the bottom of a 2x2 card */
+  .card-add { flex-shrink: 0; }
+
+  .card-add-input {
+    width: 100%;
+    font: inherit;
+    font-size: 0.82rem;
+    color: var(--text);
+    background: var(--surface-alt);
+    border: 1.5px solid var(--border-light, color-mix(in srgb, var(--text-dim) 50%, transparent));
+    border-radius: var(--radius-xs);
+    padding: 5px 8px;
+    outline: none;
+    transition: border-color 0.12s;
+  }
+
+  .card-add-input:focus { border-color: var(--accent); }
+  .card-add-input::placeholder { color: var(--text-dim); }
+
   .card-preview-item {
     display: flex;
     align-items: center;
@@ -520,6 +549,43 @@
   .card-menu-item:hover { background: var(--surface-alt); }
   .card-menu-item.danger { color: var(--red); }
   .card-menu-item.danger:hover { background: var(--red-soft); }
+
+  /* Task edit / delete menu — three-dot tap or right-click */
+  .task-menu {
+    position: fixed;
+    z-index: 95;
+    display: none;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 132px;
+    background: var(--surface);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.26);
+    padding: 5px;
+  }
+
+  .task-menu.open { display: flex; }
+
+  .task-menu-item {
+    background: none;
+    border: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    font: inherit;
+    font-size: 0.92rem;
+    color: var(--text);
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.1s;
+  }
+
+  .task-menu-item:hover { background: var(--surface-alt); }
+  .task-menu-item.danger { color: var(--red); }
+  .task-menu-item.danger:hover { background: var(--red-soft); }
+  .task-menu-item svg { flex-shrink: 0; }
 
   .list-card-counts {
     font-size: 0.72rem;
@@ -812,6 +878,36 @@
 
   .task-face:hover .delete-btn { opacity: 1; }
   .delete-btn:hover { color: var(--red); }
+
+  /* Per-task ⋯ menu button */
+  .task-menu-btn {
+    opacity: 0.4;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 4px 3px;
+    line-height: 0;
+    flex-shrink: 0;
+    border-radius: var(--radius-xs);
+    transition: opacity 0.12s, color 0.12s, background 0.12s;
+  }
+
+  .task-face:hover .task-menu-btn { opacity: 1; }
+  .task-menu-btn:hover { color: var(--accent); background: var(--surface-alt); }
+
+  /* Inline edit field, sits where the task text was */
+  .task-edit-input {
+    flex: 1;
+    min-width: 0;
+    font: inherit;
+    color: var(--text);
+    background: var(--surface-alt);
+    border: 1.5px solid var(--accent);
+    border-radius: var(--radius-xs);
+    padding: 3px 7px;
+    outline: none;
+  }
 
   /* Full-screen colour flash on complete / delete */
   .color-pop {
@@ -1895,6 +1991,18 @@
   </button>
 </div>
 
+<!-- TASK EDIT / DELETE MENU -->
+<div class="task-menu" id="taskMenu">
+  <button class="task-menu-item" data-act="edit">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4.5L20 8.5 15.5 4 4 15.5V20z"/><path d="M13.5 6l4.5 4.5"/></svg>
+    Edit
+  </button>
+  <button class="task-menu-item danger" data-act="del">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    Delete
+  </button>
+</div>
+
 <script>
   const STORAGE_KEY = 'checklist_data';
   // The browser's own lists. Written ONLY while signed out, so it can never
@@ -1933,6 +2041,10 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.9.0', date: '2026-05-22', changes: [
+      'Edit a task from its three-dot menu, or right-click on desktop',
+      'Add tasks straight from a 2×2 card',
+    ]},
     { version: '1.8.0', date: '2026-05-22', changes: [
       'Drop one list onto another to combine them into one',
     ]},
@@ -2363,8 +2475,12 @@
           `<div class="card-preview-item" data-task="${t.id}">`
           + `<span class="card-preview-box"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6 5,9 10,3"/></svg></span>`
           + `<span class="card-preview-text">${esc(t.text)}</span></div>`).join('');
-        previewHtml = `<div class="card-preview">${items
-          || '<div class="card-preview-empty">No tasks yet</div>'}</div>`;
+        previewHtml = `<div class="card-preview">`
+          + `<div class="card-preview-list">${items
+            || '<div class="card-preview-empty">No tasks yet</div>'}</div>`
+          + `<div class="card-add"><input class="card-add-input" type="text" `
+          + `placeholder="Add task" maxlength="200"></div>`
+          + `</div>`;
       }
 
       const card = document.createElement('div');
@@ -2412,16 +2528,35 @@
         });
       });
 
+      // Add a task straight from a 2x2 card.
+      const cardAdd = card.querySelector('.card-add-input');
+      if (cardAdd) {
+        cardAdd.addEventListener('keydown', e => {
+          if (e.key !== 'Enter') return;
+          e.preventDefault();
+          const text = cardAdd.value.trim();
+          if (!text) return;
+          list.todos.push({ id: uid(), text });
+          saveState();
+          renderHome();
+          const next = document.querySelector(
+            '.list-card[data-list-id="' + list.id + '"] .card-add-input');
+          if (next) next.focus();
+        });
+      }
+
       // Tap opens the list; press-and-hold starts a drag-reorder.
       card.addEventListener('touchstart', e => {
         if (e.touches.length !== 1 || e.target.closest('.card-icon-btn')
-            || e.target.closest('.card-resize') || e.target.closest('.card-preview-item')) return;
+            || e.target.closest('.card-resize') || e.target.closest('.card-preview-item')
+            || e.target.closest('.card-add')) return;
         lastHomeTouch = Date.now();
         homePressStart(list.id, card, e.touches[0].clientX, e.touches[0].clientY);
       }, { passive: true });
       card.addEventListener('mousedown', e => {
         if (e.button !== 0 || e.target.closest('.card-icon-btn')
-            || e.target.closest('.card-resize') || e.target.closest('.card-preview-item')) return;
+            || e.target.closest('.card-resize') || e.target.closest('.card-preview-item')
+            || e.target.closest('.card-add')) return;
         if (Date.now() - lastHomeTouch < 800) return;
         homePressStart(list.id, card, e.clientX, e.clientY);
       });
@@ -2948,6 +3083,58 @@
     cardMenuListId = null;
   }
 
+  // --- Task ⋯ / right-click menu -------------------------------------------
+  let taskMenuId = null;
+
+  function openTaskMenu(taskId, x, y) {
+    taskMenuId = taskId;
+    const menu = document.getElementById('taskMenu');
+    menu.classList.add('open');
+    const w = menu.offsetWidth, h = menu.offsetHeight;
+    const left = Math.max(8, Math.min(x, window.innerWidth - 8 - w));
+    const top = Math.max(8, Math.min(y, window.innerHeight - 8 - h));
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+  }
+
+  function closeTaskMenu() {
+    document.getElementById('taskMenu').classList.remove('open');
+    taskMenuId = null;
+  }
+
+  // Inline-edit a task: its text becomes a field. Enter saves, Esc cancels.
+  function startEditTask(id) {
+    const row = document.querySelector('.task-item[data-id="' + id + '"]');
+    if (!row) return;
+    const span = row.querySelector('.task-text');
+    const list = activeList();
+    const task = list && list.todos.find(t => t.id === id);
+    if (!span || !task) return;
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'task-edit-input';
+    inp.maxLength = 200;
+    inp.value = task.text;
+    span.replaceWith(inp);
+    inp.focus();
+    inp.select();
+    let settled = false;
+    const finish = save => {
+      if (settled) return;
+      settled = true;
+      if (save) {
+        const v = inp.value.trim();
+        if (v && v !== task.text) { task.text = v; saveState(); }
+      }
+      render();
+    };
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    });
+    inp.addEventListener('blur', () => finish(true));
+  }
+
   // Drag reorder
   function onDragStart(e, id) {
     dragId = id;
@@ -3020,7 +3207,7 @@
           </svg>
         </div>
         <span class="task-text">${esc(task.text)}</span>
-        <button class="delete-btn" data-act="del" title="Delete">×</button>
+        <button class="task-menu-btn" title="Edit or delete" aria-label="Task options">${MENU_ICON}</button>
       </div>
     `;
 
@@ -3028,9 +3215,15 @@
       e.stopPropagation();
       completeTask(task.id);
     });
-    div.querySelector('[data-act="del"]').addEventListener('click', e => {
+    div.querySelector('.task-menu-btn').addEventListener('click', e => {
       e.stopPropagation();
-      deleteTask(task.id);
+      const r = e.currentTarget.getBoundingClientRect();
+      openTaskMenu(task.id, r.right, r.bottom + 4);
+    });
+    // Right-click anywhere on the row opens the same menu.
+    div.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      openTaskMenu(task.id, e.clientX, e.clientY);
     });
 
     attachTaskSwipe(div, task.id);
@@ -3602,10 +3795,24 @@
     });
   });
 
+  document.querySelectorAll('#taskMenu .task-menu-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const act = btn.dataset.act, id = taskMenuId;
+      closeTaskMenu();
+      if (id == null) return;
+      if (act === 'edit') startEditTask(id);
+      else if (act === 'del') deleteTask(id);
+    });
+  });
+
   document.addEventListener('click', e => {
     const menu = document.getElementById('cardMenu');
     if (menu.classList.contains('open') && !menu.contains(e.target) && !e.target.closest('[data-act="menu"]')) {
       closeCardMenu();
+    }
+    const tMenu = document.getElementById('taskMenu');
+    if (tMenu.classList.contains('open') && !tMenu.contains(e.target) && !e.target.closest('.task-menu-btn')) {
+      closeTaskMenu();
     }
   });
 
@@ -3622,7 +3829,7 @@
   });
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeFeedback(); closeWelcome(); closeHsl(); closeChangelog(); closeSettings(); closeListModal(); closeConfirm(); closeCardMenu(); }
+    if (e.key === 'Escape') { closeFeedback(); closeWelcome(); closeHsl(); closeChangelog(); closeSettings(); closeListModal(); closeConfirm(); closeCardMenu(); closeTaskMenu(); }
   });
 
   // Swipe a list to the right to slide back to all lists.
