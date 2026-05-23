@@ -2251,6 +2251,10 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.16.2', date: '2026-05-22', changes: [
+      'Tap the corner grip to flip a card between 1×1 and 2×2',
+      'Drag-to-resize triggers with a much shorter pull',
+    ]},
     { version: '1.16.1', date: '2026-05-22', changes: [
       'The 2×2 corner grip is bigger and easier to grab on a phone',
     ]},
@@ -3079,6 +3083,7 @@
         list, card: handle.closest('.list-card'),
         x0: e.clientX, y0: e.clientY, cell,
         originC: (list.pos[gridCols()] || { c: 0 }).c,
+        tDown: Date.now(), moved: false,
       };
       grid.classList.add('resizing');
       grid.style.backgroundSize = (cell + gap) + 'px ' + (cell + gap) + 'px';
@@ -3100,12 +3105,17 @@
   function onResizeMove(e) {
     if (!resizeState) return;
     const { list, card, cell, originC } = resizeState;
+    if (Math.abs(e.clientX - resizeState.x0) > 6
+        || Math.abs(e.clientY - resizeState.y0) > 6) {
+      resizeState.moved = true;
+    }
     const cols = gridCols();
     const reach = Math.max(e.clientX - resizeState.x0, e.clientY - resizeState.y0);
     const cur = card.classList.contains('big') ? 2 : 1;
     let want = cur;
-    if (cur === 1 && reach > cell * 0.4) want = 2;
-    if (cur === 2 && reach < -cell * 0.4) want = 1;
+    // A small drag now triggers the resize — the old 40% was hard to hit.
+    if (cur === 1 && reach > cell * 0.22) want = 2;
+    if (cur === 2 && reach < -cell * 0.22) want = 1;
     if (want === cur) return;
     const p = list.pos[cols];
     if (want === 2) {
@@ -3126,7 +3136,7 @@
 
   function onResizeEnd() {
     if (!resizeState) return;
-    const { list, card } = resizeState;
+    const { list, card, originC, tDown, moved } = resizeState;
     const grid = document.getElementById('listGrid');
     grid.classList.remove('resizing');
     grid.style.backgroundSize = '';
@@ -3134,10 +3144,30 @@
     document.removeEventListener('pointerup', onResizeEnd);
     document.removeEventListener('pointercancel', onResizeEnd);
     const finalSize = card.classList.contains('big') ? 2 : 1;
+    const cols = gridCols();
     resizeState = null;
     if (listSize(list) !== finalSize) {
       list.size = finalSize;
       saveState();
+    } else if (!moved && (Date.now() - tDown) < 350) {
+      // A quick tap on the corner toggles between 1x1 and 2x2 — easier on
+      // a phone than getting a precise drag right.
+      if (listSize(list) === 1) {
+        const p = list.pos[cols];
+        const occ = gridOccupancy(cols, list.id);
+        let anchorC = originC;
+        if (!cellsFree(occ, anchorC, p.r, 2, cols)) {
+          if (cellsFree(occ, anchorC - 1, p.r, 2, cols)) anchorC -= 1;
+          else { renderHome(); return; }   // no room either way
+        }
+        p.c = anchorC;
+        list.size = 2;
+        saveState();
+      } else {
+        list.pos[cols].c = originC;
+        list.size = 1;
+        saveState();
+      }
     }
     renderHome();   // rebuild so the card gains / loses its task preview
   }
