@@ -359,7 +359,18 @@
     .list-card:hover .card-resize::after { opacity: 1; }
   }
   @media (hover: none) {
-    .card-resize::after { opacity: 0.3; }
+    /* A finger needs a bigger target than a mouse — grow the hit area and
+       lift the grip's contrast so it's easier to grab. */
+    .card-resize { width: 40px; height: 40px; }
+    .card-resize::after {
+      right: 8px;
+      bottom: 8px;
+      width: 11px;
+      height: 11px;
+      border-right-width: 3px;
+      border-bottom-width: 3px;
+      opacity: 0.5;
+    }
   }
 
   /* Ghost slots shown while a card is being resized or reordered —
@@ -2240,6 +2251,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.16.1', date: '2026-05-22', changes: [
+      'The 2×2 corner grip is bigger and easier to grab on a phone',
+    ]},
     { version: '1.16.0', date: '2026-05-22', changes: [
       'Swipe to complete, delete or go back now works with a mouse too',
       'A 2×2 card on the right edge expands leftward to fit',
