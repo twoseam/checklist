@@ -5260,19 +5260,19 @@
   });
 
   // Enter confirms the primary action of whichever modal is open. Skipped
-  // when typing into a field (so the field's own Enter handler runs) and
-  // for destructive actions (so a stray Enter never deletes anything).
+  // when typing into a field that has its own Enter handler (those handlers
+  // call preventDefault). Destructive actions are no longer excluded —
+  // Enter wins through to them too.
   document.addEventListener('keydown', e => {
     if (e.key !== 'Enter' || e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.defaultPrevented) return;
     const tag = e.target && e.target.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
-        || (e.target && e.target.isContentEditable)) return;
+    if (tag === 'TEXTAREA' || (e.target && e.target.isContentEditable)) return;
     const overlays = document.querySelectorAll('.overlay.open');
     if (!overlays.length) return;
-    // Top-most open overlay wins.
     const top = overlays[overlays.length - 1];
     const primary = top.querySelector(
-      '.modal-btn-primary:not(.modal-btn-danger), .welcome-btn, .whats-new-btn'
+      '.modal-btn-primary, .welcome-btn, .whats-new-btn'
     );
     if (primary) {
       e.preventDefault();
