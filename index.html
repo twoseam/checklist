@@ -241,6 +241,12 @@
     transition: color 0.12s;
   }
   .list-view-share:hover { color: var(--on-bg); }
+  .list-view-share-count {
+    font-size: 0.72rem;
+    font-weight: 700;
+    margin-left: 3px;
+    line-height: 1;
+  }
 
   .header-right {
     display: flex;
@@ -2119,16 +2125,12 @@
   }
   .share-row .share-remove:hover { color: var(--red); }
 
-  /* Subtle "Shared" tag in the card footer, alongside the progress bar */
-  .list-card-shared-tag {
-    font-size: 0.62rem;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
+  /* Tiny "Shared" label that sits right under the open/done counts */
+  .list-card-shared-line {
+    font-size: 0.68rem;
     color: var(--text-dim);
-    padding: 2px 6px;
-    border-radius: 4px;
-    background: var(--border-subtle);
+    font-style: italic;
+    margin-top: 2px;
   }
 
   .modal-btn-primary, .modal-btn-secondary {
@@ -2494,7 +2496,6 @@
     </div>
     <div class="modal-foot-link-row">
       <button class="modal-link-danger" id="listModalDelete" onclick="deleteFromModal()" style="display:none">Delete list</button>
-      <button class="modal-link" id="listModalLeave" onclick="leaveFromModal()" style="display:none">Leave list</button>
     </div>
   </div>
 </div>
@@ -3454,8 +3455,8 @@
       card.setAttribute('data-list-id', list.id);
       const meta = listMeta.get(list.id);
       const sharedCount = meta ? meta.members.length : 1;
-      const sharedLabel = sharedCount > 1
-        ? `<div class="list-card-shared-tag" title="Shared with ${sharedCount} ${sharedCount === 2 ? 'person' : 'people'}">Shared</div>` : '';
+      const sharedLine = sharedCount > 1
+        ? `<div class="list-card-shared-line" title="Shared with ${sharedCount} ${sharedCount === 2 ? 'person' : 'people'}">Shared</div>` : '';
       card.innerHTML = `
         <div class="card-inner">
           <div class="list-card-stripe" style="background:${listHex(list)}"></div>
@@ -3467,9 +3468,9 @@
               </div>
             </div>
             <div class="list-card-counts">${open} open${done ? ' · ' + done + ' done' : ''}</div>
+            ${sharedLine}
             ${previewHtml}
             <div class="list-card-foot">
-              ${sharedLabel}
               ${badgeHtml}
               <div class="list-card-progress">
                 <div class="list-card-progress-fill" style="width:${pct}%;background:${fillColor}"></div>
@@ -3979,27 +3980,49 @@
     if (!list) return;
     const meta = listMeta.get(id);
     const isShared = meta && meta.members.length > 1;
-    const message = isShared
-      ? `"${list.name}" is shared. Deleting it removes it from your account and asks every other person whether they want to keep a copy.`
-      : `Delete "${list.name}"? This removes all of its tasks and history.`;
+    const iAmOwner = !authUser || !meta || meta.owner_id === authUser.id;
+
+    // Personal list — single confirm.
+    if (!isShared) {
+      showConfirm({
+        title: 'Delete list',
+        message: `Delete "${list.name}"? This removes all of its tasks and history.`,
+        confirmText: 'Delete list',
+        danger: true,
+        onConfirm: () => {
+          state.lists = state.lists.filter(l => l.id !== id);
+          if (state.lists.length === 0) {
+            state.lists.push(newList('List 1', 0, []));
+          }
+          saveState();
+          if (activeListId === id) goHome();
+          else renderHome();
+        },
+      });
+      return;
+    }
+
+    // Shared list — member only sees "Delete for me" (= leave).
+    if (!iAmOwner) {
+      showConfirm({
+        title: 'Remove from your account',
+        message: 'Stop seeing "' + list.name + '"? The list keeps existing for the other people on it.',
+        confirmText: 'Delete for me',
+        danger: true,
+        onConfirm: () => leaveSharedList(list),
+      });
+      return;
+    }
+
+    // Shared list — owner has both options. Confirm = leave (yourself);
+    // Extra = full delete with fork prompts.
     showConfirm({
-      title: isShared ? 'Delete shared list' : 'Delete list',
-      message: message,
-      confirmText: isShared ? 'Delete for everyone' : 'Delete list',
+      title: 'Delete shared list',
+      message: '"' + list.name + '" is shared. Delete it just for you, or for everyone?',
+      confirmText: 'Delete for me',
       danger: true,
-      onConfirm: () => {
-        if (isShared) {
-          softDeleteSharedList(list);
-          return;
-        }
-        state.lists = state.lists.filter(l => l.id !== id);
-        if (state.lists.length === 0) {
-          state.lists.push(newList('List 1', 0, []));
-        }
-        saveState();
-        if (activeListId === id) goHome();
-        else renderHome();
-      },
+      extra: { label: 'Delete for everyone', onClick: () => softDeleteSharedList(list) },
+      onConfirm: () => leaveSharedList(list),
     });
   }
 
@@ -4037,18 +4060,15 @@
     if (!state.paletteOn[pickedColor]) pickedColor = 0;
     renderColorPicker();
     styleSaveBtn();
-    // Delete + Share are owner-only; Leave is member-only. Sign-out users
-    // only see Delete (local-only lists have no membership; treated as owned).
+    // Share icon: owner-only (members go through the in-list members button).
+    // Delete: shown for any existing list; the deleteList router picks the
+    // right confirm (personal delete / member "delete for me" / owner choice).
     const meta = list ? listMeta.get(list.id) : null;
     const iAmOwner = !list ? false : (!authUser || !meta || meta.owner_id === authUser.id);
-    const showDelete = !!(list && iAmOwner);
-    const showShare  = !!(list && authUser && iAmOwner);
-    const showLeave  = !!(list && authUser && !iAmOwner);
-    document.getElementById('listModalDelete').style.display = showDelete ? '' : 'none';
-    document.getElementById('listModalShare').style.display  = showShare  ? '' : 'none';
-    document.getElementById('listModalLeave').style.display  = showLeave  ? '' : 'none';
+    document.getElementById('listModalShare').style.display  = (list && authUser && iAmOwner) ? '' : 'none';
+    document.getElementById('listModalDelete').style.display = list ? '' : 'none';
     document.querySelector('#listModalOverlay .modal-foot-link-row').style.display =
-      (showDelete || showLeave) ? '' : 'none';
+      list ? '' : 'none';
     document.getElementById('listModalOverlay').classList.add('open');
     const field = document.getElementById('listNameField');
     field.focus();
@@ -4757,8 +4777,23 @@
     document.getElementById('listTitle').textContent = list.name;
     const meta = listMeta.get(list.id);
     const iAmOwner = !authUser || !meta || meta.owner_id === authUser.id;
-    document.getElementById('listViewShare').style.display =
-      (authUser && iAmOwner) ? '' : 'none';
+    const sharedCount = meta ? meta.members.length : 1;
+    const isShared = sharedCount > 1;
+    const btn = document.getElementById('listViewShare');
+    const showBtn = !!(authUser && (iAmOwner || isShared));
+    btn.style.display = showBtn ? '' : 'none';
+    if (showBtn) {
+      if (isShared) {
+        btn.title = 'Shared with ' + sharedCount + ' ' + (sharedCount === 2 ? 'person' : 'people');
+        btn.innerHTML =
+          '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5"/><circle cx="17" cy="7" r="2.6"/><path d="M15 13c3 0 6 1.6 6 4.5"/></svg>'
+          + '<span class="list-view-share-count">' + sharedCount + '</span>';
+      } else {
+        btn.title = 'Share list';
+        btn.innerHTML =
+          '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2h2"/><polyline points="8 6 12 2 16 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>';
+      }
+    }
 
     const todoList = document.getElementById('todoList');
     const emptyState = document.getElementById('emptyState');
@@ -5993,15 +6028,25 @@
         if (meta) listMeta = meta;
       } catch (e) { console.warn('openShareModal pre-sync:', e); }
     }
-    if (!isOwnerOf({ id: lid })) {
-      showConfirm({ title: 'Only the owner can invite', message: 'Ask the person who created this list to invite more people.', confirmText: 'OK', onConfirm: () => {} });
-      return;
-    }
+    // Non-owners can open the same modal in read-only mode (members list only).
     shareListId = lid;
     closeListModal();
+    const iAmOwner = isOwnerOf({ id: lid });
+    document.querySelector('#shareModalOverlay .modal-title').textContent =
+      iAmOwner ? 'Share list' : 'Members';
+    document.getElementById('shareIntro').textContent = iAmOwner
+      ? "Invite someone by email — they'll see the list as soon as they accept."
+      : "You're on this list with:";
+    const ownerOnlyEls = [
+      document.querySelector('#shareModalOverlay .field-label'),
+      document.getElementById('shareEmailField'),
+      document.getElementById('shareInvites'),
+      document.getElementById('shareSendBtn'),
+    ];
+    ownerOnlyEls.forEach(el => { if (el) el.style.display = iAmOwner ? '' : 'none'; });
     document.getElementById('shareEmailField').value = '';
     document.getElementById('shareModalOverlay').classList.add('open');
-    setTimeout(() => document.getElementById('shareEmailField').focus(), 50);
+    if (iAmOwner) setTimeout(() => document.getElementById('shareEmailField').focus(), 50);
     await renderShareDetails();
   }
 
