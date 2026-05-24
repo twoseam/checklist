@@ -1942,6 +1942,21 @@
 
   .modal-close:hover { color: var(--red); }
 
+  /* Share icon sitting next to the list title in the edit-list popup */
+  .modal-title-share {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 4px;
+    margin: 0 0 0 8px;
+    margin-right: auto;
+    display: inline-flex;
+    align-items: center;
+    transition: color 0.12s;
+  }
+  .modal-title-share:hover { color: var(--accent); }
+
   /* Changelog */
   .changelog-entry { margin-bottom: 16px; }
   .changelog-entry:last-child { margin-bottom: 0; }
@@ -2446,6 +2461,9 @@
   <div class="modal">
     <div class="modal-header">
       <span class="modal-title" id="listModalTitle">New list</span>
+      <button class="modal-title-share" id="listModalShare" onclick="openShareModal()" title="Share list" aria-label="Share list" style="display:none">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2h2"/><polyline points="8 6 12 2 16 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+      </button>
       <button class="modal-close" onclick="closeListModal()" title="Close">×</button>
     </div>
     <label class="field-label">Name</label>
@@ -2453,7 +2471,6 @@
     <label class="field-label">Color</label>
     <div class="color-picker" id="colorPicker"></div>
     <div class="modal-actions">
-      <button class="modal-btn-primary" id="listModalShare" onclick="openShareModal()" style="display:none">Share</button>
       <button class="modal-btn-primary" id="listModalSave" onclick="saveListModal()">Save</button>
     </div>
     <div class="modal-foot-link-row">
