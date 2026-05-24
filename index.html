@@ -2462,6 +2462,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.20.2', date: '2026-05-24', changes: [
+      'Fixed: home grid no longer reshuffles after a sync — your card order sticks',
+    ]},
     { version: '1.20.1', date: '2026-05-24', changes: [
       'Fixed: lists not loading on v1.20.0 due to a cloud-sync conflict-key default',
     ]},
@@ -5412,18 +5415,32 @@
     return merged;
   }
 
-  // Pull everything from the cloud and return { settings, lists }. Lists are
-  // sorted by the user's per-device list_order (settings.list_order), with
-  // any unknown ids appended in the order Postgres returned them.
+  // Pull everything from the cloud and return { settings, lists, orderFromLegacy }.
+  // Lists are sorted by the user's per-device list_order; if user_data has no
+  // explicit order yet (every account before v1.20), we fall back to the
+  // order baked into the legacy `state.lists` blob so cards don't shuffle.
   async function fetchCloudState() {
     const ud = await supa
       .from('user_data').select('state').eq('user_id', authUser.id).maybeSingle();
     let settings = (ud.data && ud.data.state) || {};
+
+    // Grab the legacy order BEFORE we strip the legacy `lists` field.
+    let legacyOrder = null;
+    if (Array.isArray(settings.lists)) {
+      legacyOrder = settings.lists.map(l => l && l.id).filter(Boolean);
+    }
     if ('lists' in settings) { settings = Object.assign({}, settings); delete settings.lists; }
+
+    const hadExplicitOrder = Array.isArray(settings.list_order);
+    if (!hadExplicitOrder && legacyOrder && legacyOrder.length) {
+      settings.list_order = legacyOrder;
+    }
 
     const memb = await supa.from('list_members').select('list_id').eq('user_id', authUser.id);
     const ids = (memb.data || []).map(m => m.list_id);
-    if (!ids.length) return { settings: settings, lists: [] };
+    if (!ids.length) {
+      return { settings: settings, lists: [], orderInCloud: hadExplicitOrder };
+    }
 
     const [lr, vr] = await Promise.all([
       supa.from('lists').select('*').in('id', ids),
@@ -5440,7 +5457,7 @@
       const bi = orderIdx.has(b.id) ? orderIdx.get(b.id) : 1e9;
       return ai - bi;
     });
-    return { settings: settings, lists: lists };
+    return { settings: settings, lists: lists, orderInCloud: hadExplicitOrder };
   }
 
   // First pull on sign-in — replaces state, resets history, navigates home.
@@ -5448,7 +5465,7 @@
     if (!supa || !authUser) return;
     try {
       adoptingCloud = true;
-      const { settings, lists } = await fetchCloudState();
+      const { settings, lists, orderInCloud } = await fetchCloudState();
 
       if (lists.length === 0) {
         // Brand-new account: seed default starter lists, then push them up.
@@ -5476,12 +5493,21 @@
       state = normalizeState(Object.assign({}, settings, { lists: lists }));
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       snapshotCloudState();
+      // If the cloud's user_data doesn't yet have an explicit list_order
+      // (accounts on v1.19 and earlier), force one push so the home grid
+      // order gets persisted instead of being re-derived from Postgres
+      // natural order on every refresh.
+      const needsOrderPush = !orderInCloud;
+      if (needsOrderPush) lastSettingsSnap = '';
       resetHistory();
       applyPalette();
       applyDark();
       activeListId = null;
       goHome();
+      adoptingCloud = false;
+      if (needsOrderPush) pushCloud();
       offerGuestMerge();
+      return;
     } catch (e) {
       console.warn('JotList pullCloud:', e);
     } finally {
