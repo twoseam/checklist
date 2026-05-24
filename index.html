@@ -5037,14 +5037,12 @@
             wrap.classList.remove('open');
           });
         } else {
-          // Opening: set to measured height; clear after the transition so the
-          // panel can grow freely if anything below adjusts.
+          // Opening: set to measured height and leave it. Static content,
+          // so scrollHeight is the correct final value — clearing it would
+          // fall back to the CSS base `max-height: 0` and snap the panel
+          // shut the moment the transition finished.
           wrap.classList.add('open');
           panel.style.maxHeight = panel.scrollHeight + 'px';
-          panel.addEventListener('transitionend', function done() {
-            panel.style.maxHeight = '';
-            panel.removeEventListener('transitionend', done);
-          });
         }
       });
     });
