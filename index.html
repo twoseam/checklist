@@ -1532,16 +1532,17 @@
     width: 100%;
     padding: 11px;
     border-radius: var(--radius-sm);
-    border: 1px solid var(--border-subtle);
-    background: var(--surface);
+    border: 1px solid color-mix(in srgb, var(--text) 18%, transparent);
+    background: color-mix(in srgb, var(--text) 5%, var(--surface));
     color: var(--text);
     font: inherit;
     font-weight: 600;
     font-size: 0.88rem;
     cursor: pointer;
-    transition: transform 0.1s;
+    transition: transform 0.1s, background 0.15s;
   }
 
+  .account-btn:hover { background: color-mix(in srgb, var(--text) 9%, var(--surface)); }
   .account-btn:active { transform: scale(0.98); }
   .account-btn.google svg { width: 17px; height: 17px; flex-shrink: 0; }
 
@@ -2056,15 +2057,16 @@
     background: var(--accent);
   }
 
-  /* Patches are tucked behind a twirl-down inside their parent .0 entry */
+  /* Patches are tucked behind a twirl-down inside their parent .0 entry.
+     Custom toggle (not <details>) so we can animate the height — <details>
+     snaps from 0 to auto with no transition. */
   .changelog-patches {
     margin-top: 8px;
     border-top: 1px dashed var(--border-subtle);
     padding-top: 6px;
   }
-  .changelog-patches summary {
+  .changelog-patches-toggle {
     cursor: pointer;
-    list-style: none;
     font-size: 0.72rem;
     font-weight: 600;
     color: var(--text-dim);
@@ -2072,15 +2074,22 @@
     display: inline-flex;
     align-items: center;
     user-select: none;
+    background: none;
+    border: none;
+    font-family: inherit;
   }
-  .changelog-patches summary::-webkit-details-marker { display: none; }
-  .changelog-patches summary::before {
-    content: '▸';
+  .changelog-patches-toggle .chev {
     display: inline-block;
     margin-right: 6px;
-    transition: transform 0.15s;
+    transition: transform 0.18s;
   }
-  .changelog-patches[open] summary::before { transform: rotate(90deg); }
+  .changelog-patches.open .changelog-patches-toggle .chev { transform: rotate(90deg); }
+  .changelog-patches-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .changelog-patches.open .changelog-patches-body { max-height: 1200px; }
   .changelog-patch { margin-top: 10px; padding-left: 4px; }
   .changelog-patch .changelog-version { font-size: 0.74rem; }
   .changelog-patch .changelog-list li { font-size: 0.74rem; }
@@ -4985,24 +4994,30 @@
         </ul>
       `;
       const patchesHtml = patches.length ? `
-        <details class="changelog-patches">
-          <summary>${patches.length} patch${patches.length === 1 ? '' : 'es'}</summary>
-          ${patches.map(e => `
-            <div class="changelog-patch">
-              <div class="changelog-entry-head">
-                <span class="changelog-version">v${esc(e.version)}</span>
-                <span class="changelog-date">${esc(e.date)}</span>
+        <div class="changelog-patches">
+          <button type="button" class="changelog-patches-toggle"><span class="chev">▸</span> ${patches.length} patch${patches.length === 1 ? '' : 'es'}</button>
+          <div class="changelog-patches-body">
+            ${patches.map(e => `
+              <div class="changelog-patch">
+                <div class="changelog-entry-head">
+                  <span class="changelog-version">v${esc(e.version)}</span>
+                  <span class="changelog-date">${esc(e.date)}</span>
+                </div>
+                <ul class="changelog-list">
+                  ${e.changes.map(c => `<li>${esc(c)}</li>`).join('')}
+                </ul>
               </div>
-              <ul class="changelog-list">
-                ${e.changes.map(c => `<li>${esc(c)}</li>`).join('')}
-              </ul>
-            </div>
-          `).join('')}
-        </details>
+            `).join('')}
+          </div>
+        </div>
       ` : '';
       return `<div class="changelog-entry">${mainHtml}${patchesHtml}</div>`;
     }).join('');
-    document.getElementById('changelogBody').innerHTML = blocks;
+    const body = document.getElementById('changelogBody');
+    body.innerHTML = blocks;
+    body.querySelectorAll('.changelog-patches-toggle').forEach(btn => {
+      btn.addEventListener('click', () => btn.parentElement.classList.toggle('open'));
+    });
   }
 
   function openChangelog() {
