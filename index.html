@@ -2491,7 +2491,7 @@
     </div>
     <p class="confirm-message" id="confirmMessage"></p>
     <div class="modal-actions">
-      <button class="modal-btn-secondary" onclick="closeConfirm()">Cancel</button>
+      <button class="modal-btn-secondary" id="confirmCancel" onclick="closeConfirm()">Cancel</button>
       <button class="modal-btn-extra" id="confirmExtra" style="display:none" onclick="runConfirmExtra()">Extra</button>
       <button class="modal-btn-primary" id="confirmOk" onclick="runConfirm()">Confirm</button>
     </div>
@@ -5013,6 +5013,7 @@
     }
     const modal = document.querySelector('#confirmOverlay .modal');
     modal.classList.toggle('minimal', !!opts.minimal);
+    document.getElementById('confirmCancel').style.display = opts.hideCancel ? 'none' : '';
     confirmAction = opts.onConfirm || null;
     document.getElementById('confirmOverlay').classList.add('open');
   }
@@ -6092,6 +6093,7 @@
       title: 'List invite',
       message: 'You were invited to "' + listName + '". Add it to your account?',
       confirmText: 'Accept',
+      hideCancel: true,
       extra: { label: 'Decline', onClick: () => acceptOrDeclineInvite(inv, false) },
       onConfirm: () => acceptOrDeclineInvite(inv, true),
     });
@@ -6191,6 +6193,7 @@
       title: 'Shared list was deleted',
       message: '"' + (m.lists.title || 'A list') + '" was deleted by its owner. Keep your own copy or discard it?',
       confirmText: 'Keep my copy',
+      hideCancel: true,
       extra: { label: 'Discard', onClick: () => discardForkedList(m) },
       onConfirm: () => keepForkedList(m),
     });
