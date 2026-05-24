@@ -1444,16 +1444,17 @@
     flex: 1;
     padding: 11px 10px;
     border-radius: var(--radius-sm);
-    border: 1px solid var(--border-subtle);
-    background: var(--surface);
+    border: 1px solid color-mix(in srgb, var(--text) 18%, transparent);
+    background: color-mix(in srgb, var(--text) 5%, var(--surface));
     color: var(--text);
     font: inherit;
     font-weight: 600;
     font-size: 0.85rem;
     cursor: pointer;
-    transition: transform 0.1s;
+    transition: transform 0.1s, background 0.15s;
   }
 
+  .palette-btn:hover { background: color-mix(in srgb, var(--text) 9%, var(--surface)); }
   .palette-btn:active { transform: scale(0.97); }
 
   .palette-btn.primary {
@@ -2055,6 +2056,35 @@
     background: var(--accent);
   }
 
+  /* Patches are tucked behind a twirl-down inside their parent .0 entry */
+  .changelog-patches {
+    margin-top: 8px;
+    border-top: 1px dashed var(--border-subtle);
+    padding-top: 6px;
+  }
+  .changelog-patches summary {
+    cursor: pointer;
+    list-style: none;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    padding: 4px 0;
+    display: inline-flex;
+    align-items: center;
+    user-select: none;
+  }
+  .changelog-patches summary::-webkit-details-marker { display: none; }
+  .changelog-patches summary::before {
+    content: '▸';
+    display: inline-block;
+    margin-right: 6px;
+    transition: transform 0.15s;
+  }
+  .changelog-patches[open] summary::before { transform: rotate(90deg); }
+  .changelog-patch { margin-top: 10px; padding-left: 4px; }
+  .changelog-patch .changelog-version { font-size: 0.74rem; }
+  .changelog-patch .changelog-list li { font-size: 0.74rem; }
+
   /* List create/edit modal */
   .field-label {
     display: block;
@@ -2632,6 +2662,11 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.21.4', date: '2026-05-24', changes: [
+      'Changelog groups each release with its bug-fix patches twirled away',
+      'Three-dot menu toggles closed when you tap the dots a second time',
+      'Settings buttons (Sign out, Set to Default, etc.) read a little louder',
+    ]},
     { version: '1.21.3', date: '2026-05-24', changes: [
       'Share lives right next to the list title now, on the card and inside the list',
       'A shared list shows a coloured "Shared" pill once it actually has more than one person on it',
@@ -3522,7 +3557,8 @@
 
       card.querySelector('[data-act="menu"]').addEventListener('click', e => {
         e.stopPropagation();
-        openCardMenu(list.id, e.currentTarget);
+        if (cardMenuListId === list.id) closeCardMenu();
+        else openCardMenu(list.id, e.currentTarget);
       });
       card.querySelectorAll('.card-resize').forEach(g => attachCardResize(g, list));
 
@@ -4925,19 +4961,48 @@
   }
 
   // --- Changelog -----------------------------------------------------------
+  // Entries are grouped by major.minor; the .0 release shows expanded with
+  // its full notes, and any later patches are tucked behind a twirl-down
+  // so the page stays scan-able.
   function renderVersion() {
     document.getElementById('versionFooter').textContent = 'v' + APP_VERSION;
-    document.getElementById('changelogBody').innerHTML = CHANGELOG.map(entry => `
-      <div class="changelog-entry">
+    const groups = new Map();
+    CHANGELOG.forEach(e => {
+      const key = e.version.split('.').slice(0, 2).join('.');
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(e);
+    });
+    const blocks = [...groups.entries()].map(([minor, entries]) => {
+      const main = entries.find(e => /\.0$/.test(e.version)) || entries[entries.length - 1];
+      const patches = entries.filter(e => e !== main);
+      const mainHtml = `
         <div class="changelog-entry-head">
-          <span class="changelog-version">v${esc(entry.version)}</span>
-          <span class="changelog-date">${esc(entry.date)}</span>
+          <span class="changelog-version">v${esc(main.version)}</span>
+          <span class="changelog-date">${esc(main.date)}</span>
         </div>
         <ul class="changelog-list">
-          ${entry.changes.map(c => `<li>${esc(c)}</li>`).join('')}
+          ${main.changes.map(c => `<li>${esc(c)}</li>`).join('')}
         </ul>
-      </div>
-    `).join('');
+      `;
+      const patchesHtml = patches.length ? `
+        <details class="changelog-patches">
+          <summary>${patches.length} patch${patches.length === 1 ? '' : 'es'}</summary>
+          ${patches.map(e => `
+            <div class="changelog-patch">
+              <div class="changelog-entry-head">
+                <span class="changelog-version">v${esc(e.version)}</span>
+                <span class="changelog-date">${esc(e.date)}</span>
+              </div>
+              <ul class="changelog-list">
+                ${e.changes.map(c => `<li>${esc(c)}</li>`).join('')}
+              </ul>
+            </div>
+          `).join('')}
+        </details>
+      ` : '';
+      return `<div class="changelog-entry">${mainHtml}${patchesHtml}</div>`;
+    }).join('');
+    document.getElementById('changelogBody').innerHTML = blocks;
   }
 
   function openChangelog() {
