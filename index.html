@@ -2405,8 +2405,12 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.18.6', date: '2026-05-23', changes: [
+      'Fixed again: the 2×2 size really sticks this time',
+      'Two-finger drag right (touch) goes back to your lists from anywhere',
+      'Click-and-hold then drag right (mouse) also goes back',
+    ]},
     { version: '1.18.5', date: '2026-05-23', changes: [
-      'Fixed: a 2×2 card no longer snaps back to 1×1 a second after resize',
       'Swipe from the left edge to go back to your lists — touch or mouse',
     ]},
     { version: '1.18.4', date: '2026-05-23', changes: [
@@ -2957,22 +2961,29 @@
     else renderHome();
   }
 
-  // Swipe (or click-drag) from the left edge of the list view → go home.
-  // Works with touch on phones and the mouse on desktop. Edge-pan only so
-  // it never fights with task swipes (which start mid-row).
+  // Three ways to go back from a list to the home grid:
+  //   • Touch: swipe right from the left edge (single finger).
+  //   • Touch: drag right anywhere with TWO fingers.
+  //   • Mouse: from the left edge, click-and-drag right.
+  //   • Mouse: hold a click for ~250ms anywhere, then drag right.
+  // The 2-finger / hold variants work anywhere so the user doesn't have to
+  // reach for the edge; the edge versions stay as the quick path.
   (function attachListViewSwipe() {
     const lv = document.getElementById('listView');
     if (!lv) return;
-    const EDGE = 30;       // start within this many px of the left edge
-    const COMMIT = 90;     // dx that commits a "go home"
-    const VERT_SLOP = 14;  // vertical jitter allowed before we abandon
-    let drag = null;
+    const EDGE = 30;        // start within this many px of the left edge
+    const COMMIT = 90;      // dx that commits a "go home"
+    const VERT_SLOP = 56;   // vertical jitter allowed before we abandon
+    const HOLD_MS = 250;    // press-and-hold-then-drag (mouse, anywhere)
+    let drag = null;        // active rightward drag (edge / hold / 2-finger)
 
-    function start(x, y, target) {
-      if (!activeListId) return;
-      if (x > EDGE) return;
-      // Let the back button do its own thing.
-      if (target && target.closest && target.closest('.back-btn')) return;
+    function isInteractive(target) {
+      return target && target.closest && target.closest(
+        '.back-btn, .task-edit-input, button, input, textarea, a, .card-icon-btn, .task-item'
+      );
+    }
+
+    function startDrag(x, y) {
       drag = { x0: x, y0: y, dx: 0, dy: 0, decided: false, horiz: false };
     }
 
@@ -2988,7 +2999,7 @@
         lv.classList.add('dragging');
       }
       if (!drag.horiz) return false;
-      if (Math.abs(drag.dy) > VERT_SLOP * 4) { reset(); return false; }
+      if (Math.abs(drag.dy) > VERT_SLOP) { reset(); return false; }
       const dx = Math.max(0, drag.dx);
       lv.style.transform = 'translateX(' + dx + 'px)';
       return true;
@@ -3002,36 +3013,74 @@
 
     function end() {
       if (!drag) return;
-      const dx = drag.dx;
-      const horiz = drag.horiz;
-      drag = null;
-      lv.classList.remove('dragging');
-      lv.style.transform = '';
+      const dx = drag.dx, horiz = drag.horiz;
+      reset();
       if (horiz && dx > COMMIT) goHome();
     }
 
+    // --- Touch ---------------------------------------------------------------
     lv.addEventListener('touchstart', e => {
+      if (!activeListId) return;
+      // Two fingers anywhere → start a back-drag.
+      if (e.touches.length === 2) {
+        const ax = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const ay = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        startDrag(ax, ay);
+        return;
+      }
+      // Single finger only triggers from the very left edge.
+      if (e.touches.length !== 1) return;
       const t = e.touches[0];
-      if (t) start(t.clientX, t.clientY, e.target);
+      if (t.clientX > EDGE) return;
+      if (isInteractive(e.target)) return;
+      startDrag(t.clientX, t.clientY);
     }, { passive: true });
-    lv.addEventListener('touchmove', e => {
-      const t = e.touches[0];
-      if (!t) return;
-      if (move(t.clientX, t.clientY) && e.cancelable) e.preventDefault();
-    }, { passive: false });
-    lv.addEventListener('touchend', end);
-    lv.addEventListener('touchcancel', () => { reset(); });
 
-    lv.addEventListener('mousedown', e => {
-      if (e.button !== 0) return;
-      start(e.clientX, e.clientY, e.target);
+    lv.addEventListener('touchmove', e => {
       if (!drag) return;
-      const onMove = ev => move(ev.clientX, ev.clientY);
-      const onUp = () => {
+      let x, y;
+      if (e.touches.length === 2) {
+        x = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        y = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      } else if (e.touches.length === 1) {
+        x = e.touches[0].clientX;
+        y = e.touches[0].clientY;
+      } else { return; }
+      if (move(x, y) && e.cancelable) e.preventDefault();
+    }, { passive: false });
+
+    lv.addEventListener('touchend', end);
+    lv.addEventListener('touchcancel', reset);
+
+    // --- Mouse ---------------------------------------------------------------
+    lv.addEventListener('mousedown', e => {
+      if (!activeListId || e.button !== 0) return;
+      if (isInteractive(e.target)) return;
+      const x0 = e.clientX, y0 = e.clientY;
+      const fromEdge = x0 <= EDGE;
+      // Edge path: start the drag immediately. Anywhere-else path: wait for
+      // a 250ms hold without movement before arming.
+      let holdTimer = fromEdge ? null
+        : setTimeout(() => { holdTimer = null; startDrag(x0, y0); }, HOLD_MS);
+      if (fromEdge) startDrag(x0, y0);
+      const onMove = ev => {
+        if (holdTimer) {
+          // pre-hold: any movement cancels the hold-arm
+          if (Math.abs(ev.clientX - x0) > 6 || Math.abs(ev.clientY - y0) > 6) {
+            clearTimeout(holdTimer);
+            holdTimer = null;
+            cleanup();
+          }
+          return;
+        }
+        move(ev.clientX, ev.clientY);
+      };
+      const onUp = () => { cleanup(); end(); };
+      function cleanup() {
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
-        end();
-      };
+        if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+      }
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
     });
@@ -3306,7 +3355,7 @@
 
   function onResizeMove(e) {
     if (!resizeState) return;
-    const { card, cell, dirX, dirY } = resizeState;
+    const { card, cell, dirX, dirY, list } = resizeState;
     if (Math.abs(e.clientX - resizeState.x0) > 6
         || Math.abs(e.clientY - resizeState.y0) > 6) {
       resizeState.moved = true;
@@ -3315,32 +3364,19 @@
     const dx = (e.clientX - resizeState.x0) * dirX;
     const dy = (e.clientY - resizeState.y0) * dirY;
     const reach = Math.max(dx, dy);
-    const isBig = card.classList.contains('big');
-    // Threshold to commit to the next size — generous so the snap feels
-    // earned, not premature.
-    const COMMIT = cell * 0.6;
-    const want = !isBig
-      ? (reach > COMMIT ? true : isBig)
-      : (reach < -COMMIT * 0.5 ? false : isBig);
-    if (want !== isBig) {
-      // Crossing into the new size — clear our live scale and let
-      // flipMove animate every card to its new grid slot.
-      card.style.transform = '';
-      card.style.transformOrigin = '';
-      card.style.zIndex = '';
-      flipMove(() => card.classList.toggle('big', want));
-      return;
-    }
-    // No threshold crossed — give continuous "follow my finger" feedback by
-    // scaling the card from its anchor corner toward where the user is
-    // pulling. Capped just shy of 2x so the snap to .big isn't a jump.
+    const isBig = listSize(list) === 2;
+    // Live "follow my finger" scaling. The class doesn't toggle mid-drag —
+    // we commit once on release. This avoids the mid-drag layout flip that
+    // used to race with the release path and snap the card back to 1x1.
     let scale;
     if (!isBig) {
-      scale = 1 + Math.max(0, Math.min(reach / cell, 0.65));
+      // 1x1 growing — scale up to 2x at most.
+      scale = 1 + Math.max(0, Math.min(reach / cell, 1.0));
     } else {
-      // 2x2 shrinking back toward 1x1 — clamp to a gentle range.
-      scale = 1 + Math.min(0, Math.max(reach / (cell * 2), -0.18));
+      // 2x2 shrinking — scale down to 0.5x at most.
+      scale = 1 + Math.min(0, Math.max(reach / (cell * 2), -0.5));
     }
+    resizeState.lastScale = scale;
     card.style.transformOrigin = originForGrip(dirX, dirY);
     card.style.transform = 'scale(' + scale + ')';
     card.style.zIndex = '5';
@@ -3348,41 +3384,41 @@
 
   function onResizeEnd() {
     if (!resizeState) return;
-    const { list, card, tDown, moved } = resizeState;
+    const { list, card, tDown, moved, lastScale } = resizeState;
     const grid = document.getElementById('listGrid');
     grid.classList.remove('resizing');
     grid.style.backgroundSize = '';
     document.removeEventListener('pointermove', onResizeMove);
     document.removeEventListener('pointerup', onResizeEnd);
     document.removeEventListener('pointercancel', onResizeEnd);
-    let finalSize = card.classList.contains('big') ? 2 : 1;
-    const hadTransform = !!card.style.transform;
-    // A quick tap on the corner toggles between 1x1 and 2x2 — easier on
-    // a phone than getting a precise drag right.
+
+    const isBig = listSize(list) === 2;
+    let finalSize = isBig ? 2 : 1;
     if (!moved && (Date.now() - tDown) < 350) {
-      finalSize = listSize(list) === 1 ? 2 : 1;
-      flipMove(() => card.classList.toggle('big', finalSize === 2));
+      // Quick tap on the corner toggles.
+      finalSize = isBig ? 1 : 2;
+    } else if (moved) {
+      // Commit based on how far they pulled. Generous threshold so the user
+      // has to clearly choose, not just twitch.
+      const s = lastScale || 1;
+      if (!isBig && s > 1.5) finalSize = 2;
+      else if (isBig && s < 0.7) finalSize = 1;
     }
-    // If the user released mid-drag without crossing the commit threshold,
-    // settle the scaled card back to its natural size with a smooth glide.
-    if (hadTransform) {
-      card.style.transition = 'transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)';
-      card.style.transform = '';
-      const c = card;
-      setTimeout(() => {
-        c.style.transition = '';
-        c.style.transformOrigin = '';
-        c.style.zIndex = '';
-      }, 220);
-    }
+
+    // Clear every inline style we set during the drag. No setTimeout, no
+    // transition — anything async here used to race with cloud-sync and
+    // re-render, snapping the card back to 1x1 a second later.
+    card.style.transform = '';
+    card.style.transformOrigin = '';
+    card.style.zIndex = '';
+    card.style.transition = '';
+
     resizeState = null;
     if (listSize(list) !== finalSize) {
       list.size = finalSize;
       saveState();
     }
-    // Wait for the settle animation before rebuilding, so renderHome
-    // doesn't blow away the transition mid-flight.
-    setTimeout(() => renderHome(), hadTransform ? 230 : 0);
+    renderHome();
   }
 
   // Re-square the grid after a viewport change. iOS reports a stale width
