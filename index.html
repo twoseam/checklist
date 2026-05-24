@@ -2543,6 +2543,12 @@
       <button class="modal-btn-extra" id="confirmExtra" style="display:none" onclick="runConfirmExtra()">Extra</button>
       <button class="modal-btn-primary" id="confirmOk" onclick="runConfirm()">Confirm</button>
     </div>
+    <div class="modal-foot-link-row" id="confirmExtraLinkRow" style="display:none">
+      <button class="modal-link-danger" id="confirmExtraLink" onclick="runConfirmExtra()"></button>
+    </div>
+    <div class="modal-foot-link-row" id="confirmCancelLinkRow" style="display:none">
+      <button class="modal-link" onclick="closeConfirm()">Cancel</button>
+    </div>
   </div>
 </div>
 
@@ -4034,15 +4040,21 @@
       return;
     }
 
-    // Shared list — owner has both options. Confirm = leave (yourself);
-    // Extra = full delete with fork prompts.
+    // Shared list — owner has both options. The destructive "delete for
+    // everyone" is the big primary; "delete for me" is a red text link
+    // below; Cancel is a muted text link at the very bottom.
     showConfirm({
       title: 'Delete shared list',
-      message: '"' + list.name + '" is shared. Delete it just for you, or for everyone?',
-      confirmText: 'Delete for me',
+      message: '"' + list.name + '" is shared with others. Choose what happens to their copy.',
+      confirmText: 'Delete for everyone',
       danger: true,
-      extra: { label: 'Delete for everyone', onClick: () => softDeleteSharedList(list) },
-      onConfirm: () => leaveSharedList(list),
+      onConfirm: () => softDeleteSharedList(list),
+      extra: {
+        label: 'Delete for me',
+        asLink: true,
+        onClick: () => leaveSharedList(list),
+      },
+      cancelAtBottom: true,
     });
   }
 
@@ -5100,17 +5112,40 @@
     ok.textContent = opts.confirmText || 'Confirm';
     ok.classList.toggle('modal-btn-danger', !!opts.danger);
     const extra = document.getElementById('confirmExtra');
+    const extraLinkRow = document.getElementById('confirmExtraLinkRow');
+    const extraLink = document.getElementById('confirmExtraLink');
+    const cancelBtn = document.getElementById('confirmCancel');
+    const cancelLinkRow = document.getElementById('confirmCancelLinkRow');
     if (opts.extra) {
-      extra.textContent = opts.extra.label || 'More';
-      extra.style.display = '';
       confirmExtraAction = opts.extra.onClick || null;
+      if (opts.extra.asLink) {
+        extra.style.display = 'none';
+        extraLink.textContent = opts.extra.label || 'More';
+        extraLinkRow.style.display = '';
+      } else {
+        extra.textContent = opts.extra.label || 'More';
+        extra.style.display = '';
+        extraLinkRow.style.display = 'none';
+      }
     } else {
       extra.style.display = 'none';
+      extraLinkRow.style.display = 'none';
       confirmExtraAction = null;
     }
     const modal = document.querySelector('#confirmOverlay .modal');
     modal.classList.toggle('minimal', !!opts.minimal);
-    document.getElementById('confirmCancel').style.display = opts.hideCancel ? 'none' : '';
+    // Cancel can live in the action row, or as a text link at the bottom,
+    // or be hidden entirely.
+    if (opts.hideCancel) {
+      cancelBtn.style.display = 'none';
+      cancelLinkRow.style.display = 'none';
+    } else if (opts.cancelAtBottom) {
+      cancelBtn.style.display = 'none';
+      cancelLinkRow.style.display = '';
+    } else {
+      cancelBtn.style.display = '';
+      cancelLinkRow.style.display = 'none';
+    }
     confirmAction = opts.onConfirm || null;
     document.getElementById('confirmOverlay').classList.add('open');
   }
