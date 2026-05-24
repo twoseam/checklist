@@ -2394,7 +2394,10 @@
         const idx = st.palette.indexOf(l.color);
         l.color = idx >= 0 ? idx : 0;
       }
-      if (l.size !== 2) l.size = 1;
+      // Coerce numerically — Supabase jsonb has been observed to return l.size
+      // as a string ("2"), which strict-!== then resets back to 1 a second
+      // after a resize. Always end up with a real number.
+      l.size = (Number(l.size) === 2) ? 2 : 1;
       if (l.pos) delete l.pos;   // v1.15.x free-placement field, no longer used
     });
     return st;
@@ -2402,6 +2405,10 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.18.5', date: '2026-05-23', changes: [
+      'Fixed: a 2×2 card no longer snaps back to 1×1 a second after resize',
+      'Swipe from the left edge to go back to your lists — touch or mouse',
+    ]},
     { version: '1.18.4', date: '2026-05-23', changes: [
       'All primary buttons share the red→gold brand wash',
       'New-list modal centred again, with extra room for the keyboard bar',
@@ -2949,6 +2956,86 @@
     if (activeListId) renderList();
     else renderHome();
   }
+
+  // Swipe (or click-drag) from the left edge of the list view → go home.
+  // Works with touch on phones and the mouse on desktop. Edge-pan only so
+  // it never fights with task swipes (which start mid-row).
+  (function attachListViewSwipe() {
+    const lv = document.getElementById('listView');
+    if (!lv) return;
+    const EDGE = 30;       // start within this many px of the left edge
+    const COMMIT = 90;     // dx that commits a "go home"
+    const VERT_SLOP = 14;  // vertical jitter allowed before we abandon
+    let drag = null;
+
+    function start(x, y, target) {
+      if (!activeListId) return;
+      if (x > EDGE) return;
+      // Let the back button do its own thing.
+      if (target && target.closest && target.closest('.back-btn')) return;
+      drag = { x0: x, y0: y, dx: 0, dy: 0, decided: false, horiz: false };
+    }
+
+    function move(x, y) {
+      if (!drag) return false;
+      drag.dx = x - drag.x0;
+      drag.dy = y - drag.y0;
+      if (!drag.decided) {
+        if (Math.abs(drag.dx) < 6 && Math.abs(drag.dy) < 6) return false;
+        drag.decided = true;
+        drag.horiz = Math.abs(drag.dx) > Math.abs(drag.dy);
+        if (!drag.horiz) { reset(); return false; }
+        lv.classList.add('dragging');
+      }
+      if (!drag.horiz) return false;
+      if (Math.abs(drag.dy) > VERT_SLOP * 4) { reset(); return false; }
+      const dx = Math.max(0, drag.dx);
+      lv.style.transform = 'translateX(' + dx + 'px)';
+      return true;
+    }
+
+    function reset() {
+      lv.classList.remove('dragging');
+      lv.style.transform = '';
+      drag = null;
+    }
+
+    function end() {
+      if (!drag) return;
+      const dx = drag.dx;
+      const horiz = drag.horiz;
+      drag = null;
+      lv.classList.remove('dragging');
+      lv.style.transform = '';
+      if (horiz && dx > COMMIT) goHome();
+    }
+
+    lv.addEventListener('touchstart', e => {
+      const t = e.touches[0];
+      if (t) start(t.clientX, t.clientY, e.target);
+    }, { passive: true });
+    lv.addEventListener('touchmove', e => {
+      const t = e.touches[0];
+      if (!t) return;
+      if (move(t.clientX, t.clientY) && e.cancelable) e.preventDefault();
+    }, { passive: false });
+    lv.addEventListener('touchend', end);
+    lv.addEventListener('touchcancel', () => { reset(); });
+
+    lv.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      start(e.clientX, e.clientY, e.target);
+      if (!drag) return;
+      const onMove = ev => move(ev.clientX, ev.clientY);
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        end();
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  })();
 
   // --- Home view -----------------------------------------------------------
   const MENU_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2.3"/><circle cx="12" cy="12" r="2.3"/><circle cx="19" cy="12" r="2.3"/></svg>`;
