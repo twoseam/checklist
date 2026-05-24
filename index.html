@@ -376,20 +376,10 @@
     .list-card:hover .card-resize::after { opacity: 1; }
   }
   @media (hover: none) {
-    /* Big touch target, subtle visual — the grip's hit zone is 40×40 but
-       the triangle itself stays small and quiet so it doesn't dominate. */
+    /* Big touch target, no visual — the welcome flow teaches the corner
+       drag gesture, so the visible triangle would just clutter the card. */
     .card-resize { width: 40px; height: 40px; }
-    .card-resize.br::after, .card-resize.bl::after,
-    .card-resize.tr::after, .card-resize.tl::after {
-      width: 10px;
-      height: 10px;
-      opacity: 0.4;
-    }
-    /* Stay flush to the corner on touch too. */
-    .card-resize.br::after { right: 0; bottom: 0; }
-    .card-resize.bl::after { left:  0; bottom: 0; }
-    .card-resize.tr::after { right: 0; top:    0; }
-    .card-resize.tl::after { left:  0; top:    0; }
+    .card-resize::after { display: none; }
   }
 
   /* Ghost slots shown while a card is being resized or reordered —
@@ -1786,6 +1776,16 @@
 
   .overlay.open { opacity: 1; pointer-events: auto; }
 
+  /* The new-list modal anchors near the top on mobile so the on-screen
+     keyboard (with its predictive-text bar) can never cover its buttons.
+     Other modals stay centred — they don't summon the keyboard. */
+  @media (max-width: 720px) {
+    #listModalOverlay {
+      align-items: flex-start;
+      padding-top: 32px;
+    }
+  }
+
   .modal {
     background: var(--surface);
     border-radius: var(--radius);
@@ -2065,13 +2065,13 @@
     justify-content: stretch;
   }
   .modal.minimal .modal-btn-primary {
-    background: linear-gradient(135deg, #c0392b 0%, #d9493a 100%);
+    background: linear-gradient(135deg, #e87a25 0%, #f3a712 100%);
     color: #fff;
     font-size: 1rem;
     font-weight: 800;
     padding: 16px 18px;
     border-radius: 12px;
-    box-shadow: 0 4px 14px rgba(192, 57, 43, 0.30);
+    box-shadow: 0 4px 14px rgba(232, 122, 37, 0.30);
   }
   .modal.minimal .modal-btn-primary:hover { filter: brightness(0.95); }
   .modal.minimal .modal-btn-secondary {
@@ -2399,6 +2399,12 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.18.3', date: '2026-05-23', changes: [
+      'Press Enter to confirm any popup',
+      'Copy button now glows orange→gold',
+      'New-list modal sits higher on mobile so the keyboard never covers it',
+      'Triangle grips hidden on touch — the welcome video teaches the drag',
+    ]},
     { version: '1.18.2', date: '2026-05-23', changes: [
       'Copy-task popup is now a single big Copy button with a subtle Cancel',
       'Modals stay vertically centred above the mobile keyboard',
@@ -4617,6 +4623,27 @@
 
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { closeFeedback(); closeWelcome(); closeHsl(); closeChangelog(); closeSettings(); closeListModal(); closeConfirm(); closeCardMenu(); }
+  });
+
+  // Enter confirms the primary action of whichever modal is open. Skipped
+  // when typing into a field (so the field's own Enter handler runs) and
+  // for destructive actions (so a stray Enter never deletes anything).
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return;
+    const tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+        || (e.target && e.target.isContentEditable)) return;
+    const overlays = document.querySelectorAll('.overlay.open');
+    if (!overlays.length) return;
+    // Top-most open overlay wins.
+    const top = overlays[overlays.length - 1];
+    const primary = top.querySelector(
+      '.modal-btn-primary:not(.modal-btn-danger), .welcome-btn, .whats-new-btn'
+    );
+    if (primary) {
+      e.preventDefault();
+      primary.click();
+    }
   });
 
   // Undo / redo — Cmd/Ctrl+Z, add Shift to redo. Skipped while a text field
