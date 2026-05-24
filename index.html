@@ -1546,6 +1546,80 @@
   }
   .account-input::placeholder { color: var(--text-dim); }
 
+  /* What's new — once per user per version */
+  .whats-new-modal {
+    max-width: 380px;
+    padding: 0;
+    overflow: hidden;
+  }
+  .whats-new-hero {
+    background: linear-gradient(135deg, #d9493a 0%, #e87a25 55%, #f3a712 100%);
+    padding: 32px 24px 26px;
+    text-align: center;
+    color: #fff;
+  }
+  .whats-new-emblem {
+    display: inline-block;
+    margin-bottom: 14px;
+    animation: wnPulse 2.4s ease-in-out infinite;
+  }
+  .whats-new-emblem svg { display: block; }
+  .wn-check {
+    stroke-dasharray: 60;
+    stroke-dashoffset: 60;
+    animation: wnDraw 2.4s ease-in-out infinite;
+  }
+  @keyframes wnPulse {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.06); }
+  }
+  @keyframes wnDraw {
+    0%   { stroke-dashoffset: 60; opacity: 0; }
+    12%  { opacity: 1; }
+    55%  { stroke-dashoffset: 0; opacity: 1; }
+    88%  { stroke-dashoffset: 0; opacity: 1; }
+    100% { stroke-dashoffset: 0; opacity: 0; }
+  }
+  .whats-new-title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    letter-spacing: -0.4px;
+  }
+  .whats-new-version {
+    font-size: 0.85rem;
+    opacity: 0.85;
+    margin-top: 2px;
+    font-weight: 600;
+  }
+  .whats-new-body { padding: 22px 24px 24px; }
+  .whats-new-list {
+    list-style: none;
+    margin: 0 0 20px;
+    padding: 0;
+  }
+  .whats-new-list li {
+    position: relative;
+    padding: 9px 0 9px 26px;
+    font-size: 0.95rem;
+    line-height: 1.45;
+    color: var(--text);
+    border-bottom: 1px solid color-mix(in srgb, var(--on-bg) 8%, transparent);
+  }
+  .whats-new-list li:last-child { border-bottom: none; }
+  .whats-new-list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 14px;
+    width: 16px;
+    height: 16px;
+    background: linear-gradient(135deg, #d9493a 0%, #f3a712 100%);
+    border-radius: 50%;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpolyline points='2,6 5,9 10,3' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 70% no-repeat;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpolyline points='2,6 5,9 10,3' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 70% no-repeat;
+  }
+  .whats-new-btn { width: 100%; }
+
   /* First-visit welcome */
   .welcome-modal { max-width: 360px; overflow: hidden; padding-left: 0; padding-right: 0; }
 
@@ -2162,6 +2236,28 @@
   </div>
 </div>
 
+<!-- WHAT'S NEW (one-shot on a version bump) -->
+<div class="overlay" id="whatsNewOverlay">
+  <div class="modal whats-new-modal">
+    <div class="whats-new-hero">
+      <div class="whats-new-emblem">
+        <svg viewBox="0 0 64 64" width="76" height="76" aria-hidden="true">
+          <circle cx="32" cy="32" r="28" fill="rgba(255,255,255,0.18)"/>
+          <path class="wn-check" d="M18 33 L28 43 L48 22"
+                fill="none" stroke="#ffffff" stroke-width="6"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="whats-new-title">What's new</div>
+      <div class="whats-new-version" id="whatsNewVersion"></div>
+    </div>
+    <div class="whats-new-body">
+      <ul class="whats-new-list" id="whatsNewList"></ul>
+      <button class="palette-btn primary whats-new-btn" onclick="closeWhatsNew()">Got it</button>
+    </div>
+  </div>
+</div>
+
 <!-- REQUEST A FEATURE -->
 <div class="overlay" id="feedbackOverlay">
   <div class="modal">
@@ -2270,6 +2366,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.18.0', date: '2026-05-23', changes: [
+      'New: a "What\'s new" popup appears once when JotList updates',
+    ]},
     { version: '1.17.3', date: '2026-05-23', changes: [
       'Resize a card from either bottom corner — drag or tap to toggle 2×2',
       'Smoother title size-up when a card grows to 2×2',
@@ -4387,6 +4486,10 @@
     if (e.target.id === 'welcomeOverlay') closeWelcome();
   });
 
+  document.getElementById('whatsNewOverlay').addEventListener('click', e => {
+    if (e.target.id === 'whatsNewOverlay') closeWhatsNew();
+  });
+
   document.getElementById('feedbackOverlay').addEventListener('click', e => {
     if (e.target.id === 'feedbackOverlay') closeFeedback();
   });
@@ -5043,10 +5146,59 @@
 
   // --- First-visit welcome ------------------------------------------------
   const WELCOME_KEY = 'jotlist_welcomed';
+  const SEEN_VERSION_KEY = 'jotlist_seen_version';
 
   function maybeWelcome() {
     if (localStorage.getItem(WELCOME_KEY)) return;
     document.getElementById('welcomeOverlay').classList.add('open');
+  }
+
+  // What's-new modal — fires once per user per version. First-time users
+  // don't see it: closeWelcome stamps them at the current version so the
+  // welcome flow is the only thing they get.
+  function cmpVersion(a, b) {
+    const pa = String(a).split('.').map(n => +n || 0);
+    const pb = String(b).split('.').map(n => +n || 0);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+      const d = (pa[i] || 0) - (pb[i] || 0);
+      if (d) return d > 0 ? 1 : -1;
+    }
+    return 0;
+  }
+
+  function maybeWhatsNew() {
+    // Don't compete with the welcome modal — that one stamps SEEN_VERSION
+    // on close, which suppresses this modal for genuine first-time users.
+    if (!localStorage.getItem(WELCOME_KEY)) return;
+    let seen = localStorage.getItem(SEEN_VERSION_KEY);
+    if (!seen) {
+      // Returning user from before this feature existed. Treat them as if
+      // they last saw the previous version, so they see this version's
+      // popup once (not the whole changelog dumped on them).
+      seen = (CHANGELOG[1] && CHANGELOG[1].version) || APP_VERSION;
+    }
+    if (cmpVersion(seen, APP_VERSION) >= 0) return;
+    // Collect every changelog entry newer than what they've seen.
+    const fresh = CHANGELOG.filter(c => cmpVersion(c.version, seen) > 0);
+    if (!fresh.length) return;
+    const changes = fresh.flatMap(c => c.changes);
+    const versionLabel = fresh.length === 1
+      ? 'v' + fresh[0].version
+      : 'v' + fresh[fresh.length - 1].version + ' → v' + fresh[0].version;
+    document.getElementById('whatsNewVersion').textContent = versionLabel;
+    const list = document.getElementById('whatsNewList');
+    list.innerHTML = '';
+    changes.forEach(text => {
+      const li = document.createElement('li');
+      li.textContent = text;
+      list.appendChild(li);
+    });
+    document.getElementById('whatsNewOverlay').classList.add('open');
+  }
+
+  function closeWhatsNew() {
+    localStorage.setItem(SEEN_VERSION_KEY, APP_VERSION);
+    document.getElementById('whatsNewOverlay').classList.remove('open');
   }
 
   let welcomePage = 1;
@@ -5090,6 +5242,9 @@
 
   function closeWelcome() {
     localStorage.setItem(WELCOME_KEY, '1');
+    // Stamp the seen-version so a brand-new user doesn't immediately get the
+    // What's-new modal on top of dismissing Welcome.
+    localStorage.setItem(SEEN_VERSION_KEY, APP_VERSION);
     document.getElementById('welcomeOverlay').classList.remove('open');
   }
 
@@ -5160,6 +5315,7 @@
   initSupa();
   trackGuest();
   maybeWelcome();
+  maybeWhatsNew();
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
