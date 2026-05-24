@@ -230,6 +230,7 @@
     align-items: center;
     gap: 10px;
   }
+  .list-view-title-row h1 { line-height: 1; }
   .list-view-share {
     background: none;
     border: none;
@@ -249,13 +250,14 @@
   }
   /* Pill version shown when the open list is actually shared */
   .list-view-share.list-view-shared-pill {
-    padding: 4px 12px;
+    padding: 5px 12px;
     border-radius: 999px;
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     line-height: 1;
+    color: color-mix(in srgb, var(--on-bg) 60%, transparent) !important;
   }
   .list-view-share.list-view-shared-pill:hover { filter: brightness(0.96); }
 
