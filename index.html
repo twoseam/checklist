@@ -200,14 +200,16 @@
     margin-bottom: 24px;
   }
 
-  /* Site logo — the JotList wordmark, monochrome so it always has
-     contrast on the coloured / charcoal background. */
+  /* Site logo — the JotList wordmark. Always white: the home view sits on a
+     gradient (or dark charcoal), and Michael's brand rule says white wordmark
+     on gradient surfaces. The home gradient is too varied to dynamically
+     invert per first-list lightness without disappearing in some palettes. */
   .logo {
     height: 34px;
     width: 116px;
     display: block;
     overflow: visible;
-    color: var(--on-bg);
+    color: #fff;
     flex-shrink: 0;
   }
 
@@ -2089,7 +2091,9 @@
     overflow: hidden;
     transition: max-height 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
-  .changelog-patches.open .changelog-patches-body { max-height: 1200px; }
+  /* JS sets max-height directly so the panel animates open AND closed with
+     the actual measured height (CSS max-height fallbacks to fixed pixels
+     don't animate symmetrically). */
   .changelog-patch { margin-top: 10px; padding-left: 4px; }
   .changelog-patch .changelog-version { font-size: 0.74rem; }
   .changelog-patch .changelog-list li { font-size: 0.74rem; }
@@ -5016,7 +5020,28 @@
     const body = document.getElementById('changelogBody');
     body.innerHTML = blocks;
     body.querySelectorAll('.changelog-patches-toggle').forEach(btn => {
-      btn.addEventListener('click', () => btn.parentElement.classList.toggle('open'));
+      btn.addEventListener('click', () => {
+        const wrap = btn.parentElement;
+        const panel = wrap.querySelector('.changelog-patches-body');
+        const isOpen = wrap.classList.contains('open');
+        if (isOpen) {
+          // Closing: pin to current measured height, next frame go to 0
+          panel.style.maxHeight = panel.scrollHeight + 'px';
+          requestAnimationFrame(() => {
+            panel.style.maxHeight = '0px';
+            wrap.classList.remove('open');
+          });
+        } else {
+          // Opening: set to measured height; clear after the transition so the
+          // panel can grow freely if anything below adjusts.
+          wrap.classList.add('open');
+          panel.style.maxHeight = panel.scrollHeight + 'px';
+          panel.addEventListener('transitionend', function done() {
+            panel.style.maxHeight = '';
+            panel.removeEventListener('transitionend', done);
+          });
+        }
+      });
     });
   }
 
