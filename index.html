@@ -2068,8 +2068,16 @@
   /* Minimal confirm modal — no header, no message. Single big gradient
      primary button with a tiny text-link cancel underneath. */
   .modal.minimal { padding: 22px 22px 18px; max-width: 320px; }
-  .modal.minimal .modal-header,
-  .modal.minimal .confirm-message { display: none; }
+  .modal.minimal .modal-header { display: none; }
+  .modal.minimal .confirm-message {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    word-break: break-all;
+    margin: 0 0 16px;
+    text-align: center;
+    max-height: 4.5em;
+    overflow: hidden;
+  }
   .modal.minimal .modal-actions {
     /* column-reverse so primary (last in DOM) sits on top, cancel below. */
     flex-direction: column-reverse;
@@ -2095,6 +2103,31 @@
     padding: 6px;
   }
   .modal.minimal .modal-btn-secondary:hover { background: transparent; color: var(--text-secondary); }
+  .modal-btn-extra {
+    font-family: inherit;
+    background: transparent;
+    color: var(--accent);
+    border: none;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 700;
+    padding: 12px;
+    border-radius: 10px;
+    transition: background 0.15s;
+  }
+  .modal-btn-extra:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .modal.minimal .modal-btn-extra { padding: 12px; }
+
+  /* Links inside a task — distinct colour, underline, tap opens an
+     action-sheet popup (Open / Copy / Cancel). Doesn't enter edit mode. */
+  .task-link {
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1.5px;
+    cursor: pointer;
+    word-break: break-all;
+  }
 
   .confirm-message {
     font-size: 0.85rem;
@@ -2359,6 +2392,7 @@
     <p class="confirm-message" id="confirmMessage"></p>
     <div class="modal-actions">
       <button class="modal-btn-secondary" onclick="closeConfirm()">Cancel</button>
+      <button class="modal-btn-extra" id="confirmExtra" style="display:none" onclick="runConfirmExtra()">Extra</button>
       <button class="modal-btn-primary" id="confirmOk" onclick="runConfirm()">Confirm</button>
     </div>
   </div>
@@ -2417,6 +2451,10 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.18.8', date: '2026-05-23', changes: [
+      'URLs in tasks are now clickable — tap opens an Open / Copy / Cancel popup',
+      'Two-finger back-swipe now beats Safari to the punch and actually animates the view',
+    ]},
     { version: '1.18.7', date: '2026-05-23', changes: [
       'Pull-to-refresh now drags the whole page like a native app',
       'New dashed brand spinner replaces the cycle icon',
@@ -2849,6 +2887,46 @@
     return d.innerHTML;
   }
 
+  // Escape text and wrap any http(s) URLs in a .task-link span. The URL is
+  // kept on `data-url` so the click handler has the un-escaped original
+  // (innerText would lose &amp; etc).
+  function linkify(s) {
+    const escaped = esc(String(s || ''));
+    return escaped.replace(/\b(https?:\/\/[^\s<]+)/gi, (m) => {
+      // Trim common trailing punctuation that's more likely sentence
+      // grammar than part of the URL.
+      let url = m, tail = '';
+      const trailing = /[.,;:!?)\]}'"]+$/;
+      const t = trailing.exec(url);
+      if (t) { tail = t[0]; url = url.slice(0, -tail.length); }
+      // url and tail are already HTML-escaped (esc above ran first), but the
+      // raw URL we hand to navigator/window.open needs the un-escaped form.
+      const raw = url.replace(/&amp;/g, '&').replace(/&lt;/g, '<')
+                     .replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+                     .replace(/&#39;/g, "'");
+      const safe = raw.replace(/"/g, '&quot;');
+      return '<a class="task-link" href="' + safe + '" data-url="' + safe
+        + '" target="_blank" rel="noopener noreferrer">' + url + '</a>' + tail;
+    });
+  }
+
+  function showLinkActions(url) {
+    if (!url) return;
+    showConfirm({
+      minimal: true,
+      message: url,
+      confirmText: 'Open link',
+      onConfirm: () => window.open(url, '_blank', 'noopener,noreferrer'),
+      extra: {
+        label: 'Copy link',
+        onClick: () => {
+          try { navigator.clipboard && navigator.clipboard.writeText(url); }
+          catch (e) {}
+        },
+      },
+    });
+  }
+
   // --- Theming -------------------------------------------------------------
   function shade(hex, amt) {
     // amt < 0 darkens toward black, amt > 0 lightens toward white
@@ -3042,6 +3120,15 @@
       startDrag(ax, ay);
     }
 
+    // Non-passive guard: kill the browser's own 2-finger history-swipe
+    // gesture before it can hijack our drag. Mobile Safari's native back
+    // gesture was intercepting every 2-finger swipe in the list view.
+    lv.addEventListener('touchstart', e => {
+      if (e.touches.length === 2 && activeListId && e.cancelable) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+
     lv.addEventListener('touchstart', e => {
       if (!activeListId) return;
       // Two fingers anywhere → start a back-drag.
@@ -3058,11 +3145,15 @@
     }, { passive: true });
 
     lv.addEventListener('touchmove', e => {
-      // If a second finger lands mid-gesture (user touched once, then added
-      // a second finger), promote the gesture to a two-finger back-drag.
+      // Always block the browser's default for any 2-finger touchmove in
+      // the list view, even before our drag is set up — otherwise Safari
+      // pre-empts with its history-swipe before we can react.
+      if (e.touches.length === 2 && activeListId && e.cancelable) {
+        e.preventDefault();
+      }
+      // If a second finger lands mid-gesture, promote to a back-drag now.
       if (!drag && activeListId && e.touches.length === 2) {
         startTwoFinger(e);
-        return;
       }
       if (!drag) return;
       let x, y;
@@ -4020,7 +4111,7 @@
             <polyline points="2,6 5,9 10,3"/>
           </svg>
         </div>
-        <span class="task-text">${esc(task.text)}</span>
+        <span class="task-text">${linkify(task.text)}</span>
       </div>
     `;
 
@@ -4029,9 +4120,19 @@
       completeTask(task.id);
     });
     // Click / tap the text to edit it inline — but not if that click is
-    // the tail end of a mouse swipe.
+    // the tail end of a mouse swipe, and not if the click landed on a
+    // detected link (those open an action-sheet popup instead).
     div.querySelector('.task-text').addEventListener('click', e => {
       e.stopPropagation();
+      const link = e.target.closest('.task-link');
+      if (link) {
+        // Modifier-click (cmd/ctrl/shift) → let the browser open the link
+        // the way it normally would (new tab, etc).
+        if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+        e.preventDefault();
+        showLinkActions(link.getAttribute('data-url'));
+        return;
+      }
       if (div._swiped) { div._swiped = false; return; }
       startEditTask(task.id);
     });
@@ -4468,7 +4569,7 @@
           <div class="done-check" data-act="restore" title="Restore to the list">
             <svg viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6 5,9 10,3"/></svg>
           </div>
-          <span class="done-text">${esc(c.text)}</span>
+          <span class="done-text">${linkify(c.text)}</span>
           <button class="done-del" data-act="del" title="Delete">×</button>
         </div>
       `;
@@ -4481,6 +4582,14 @@
         e.stopPropagation();
         exitDoneRow(row, -1);
         setTimeout(() => deleteCompleted(c.id), 280);
+      });
+      row.querySelector('.done-text').addEventListener('click', e => {
+        const link = e.target.closest('.task-link');
+        if (!link) return;
+        e.stopPropagation();
+        if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+        e.preventDefault();
+        showLinkActions(link.getAttribute('data-url'));
       });
       attachDoneSwipe(row, c.id);
       listEl.appendChild(row);
@@ -4696,6 +4805,7 @@
   // --- Branded confirm dialog ---------------------------------------------
   let confirmAction = null;
 
+  let confirmExtraAction = null;
   function showConfirm(opts) {
     document.getElementById('confirmTitle').textContent = opts.title || 'Are you sure?';
     const msgEl = document.getElementById('confirmMessage');
@@ -4704,10 +4814,25 @@
     const ok = document.getElementById('confirmOk');
     ok.textContent = opts.confirmText || 'Confirm';
     ok.classList.toggle('modal-btn-danger', !!opts.danger);
+    const extra = document.getElementById('confirmExtra');
+    if (opts.extra) {
+      extra.textContent = opts.extra.label || 'More';
+      extra.style.display = '';
+      confirmExtraAction = opts.extra.onClick || null;
+    } else {
+      extra.style.display = 'none';
+      confirmExtraAction = null;
+    }
     const modal = document.querySelector('#confirmOverlay .modal');
     modal.classList.toggle('minimal', !!opts.minimal);
     confirmAction = opts.onConfirm || null;
     document.getElementById('confirmOverlay').classList.add('open');
+  }
+
+  function runConfirmExtra() {
+    const fn = confirmExtraAction;
+    closeConfirm();
+    if (fn) fn();
   }
 
   function closeConfirm() {
