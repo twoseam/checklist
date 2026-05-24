@@ -6127,19 +6127,35 @@
     membersBox.innerHTML = '';
     invitesBox.innerHTML = '';
 
-    // Members: pull emails for each user_id via the auth.users public-readable
-    // columns. Supabase exposes those through `auth.users` only to service
-    // role, so we can't read other users' emails directly — show "Member" by
-    // default and "You" for the current user.
     const meta = listMeta.get(lid);
     const members = meta ? meta.members : [];
+    const iAmOwner = isOwnerOf({ id: lid });
+
+    // Fetch real emails via the SECURITY DEFINER RPC (auth.users isn't
+    // directly readable). Falls back to "Member" if the RPC isn't available.
+    let emailMap = new Map();
+    try {
+      const { data } = await supa.rpc('list_member_emails', { p_list_id: lid });
+      (data || []).forEach(r => emailMap.set(r.user_id, r.email));
+    } catch (e) {}
+
     members.forEach(m => {
       const row = document.createElement('div');
       row.className = 'share-row';
       const isYou = m.user_id === authUser.id;
-      row.innerHTML =
-        '<span class="share-email">' + (isYou ? userEmail() : 'Member') + '</span>' +
-        '<span class="share-tag ' + (isYou ? 'you' : '') + '">' + (m.role === 'owner' ? 'Owner' : 'Member') + '</span>';
+      const isMemberOwner = m.role === 'owner';
+      const canRemove = iAmOwner && !isYou && !isMemberOwner;
+      const display = isYou ? userEmail() : (emailMap.get(m.user_id) || 'Member');
+      let html =
+        '<span class="share-email">' + esc(display) + '</span>' +
+        '<span class="share-tag ' + (isYou ? 'you' : '') + '">' + (isMemberOwner ? 'Owner' : 'Member') + '</span>';
+      if (canRemove) {
+        html += '<button class="share-remove" title="Remove from list" aria-label="Remove from list">×</button>';
+      }
+      row.innerHTML = html;
+      if (canRemove) {
+        row.querySelector('.share-remove').addEventListener('click', () => askRemoveMember(m.user_id, display));
+      }
       membersBox.appendChild(row);
     });
 
@@ -6224,6 +6240,28 @@
         .eq('id', inviteId);
       await renderShareDetails();
     } catch (e) { console.warn('cancelInvite:', e); }
+  }
+
+  function askRemoveMember(userId, displayEmail) {
+    if (!shareListId || !userId) return;
+    showConfirm({
+      title: 'Remove from list',
+      message: 'Remove ' + (displayEmail || 'this person') + ' from this list? They lose access immediately.',
+      confirmText: 'Remove',
+      danger: true,
+      onConfirm: () => removeMember(userId),
+    });
+  }
+
+  async function removeMember(userId) {
+    if (!supa || !authUser || !shareListId || !userId) return;
+    try {
+      await supa.from('list_members').delete()
+        .eq('list_id', shareListId).eq('user_id', userId);
+      await renderShareDetails();
+      // refreshFromCloud will fire via realtime; this also updates listMeta
+      // so the home grid drops the shared pill when count goes back to 1.
+    } catch (e) { console.warn('removeMember:', e); }
   }
 
   // ---- Pending-invite popup (on sign-in) ----
