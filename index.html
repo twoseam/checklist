@@ -1776,13 +1776,13 @@
 
   .overlay.open { opacity: 1; pointer-events: auto; }
 
-  /* The new-list modal anchors near the top on mobile so the on-screen
-     keyboard (with its predictive-text bar) can never cover its buttons.
-     Other modals stay centred — they don't summon the keyboard. */
+  /* On mobile, reserve extra room at the bottom of the new-list overlay
+     so the centred modal lands clear of the iOS predictive-text bar (the
+     small bar that sits on top of the keyboard but inside the visible
+     viewport, so 100dvh doesn't exclude it). */
   @media (max-width: 720px) {
     #listModalOverlay {
-      align-items: flex-start;
-      padding-top: 32px;
+      padding-bottom: 80px;
     }
   }
 
