@@ -2540,6 +2540,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.21.1', date: '2026-05-24', changes: [
+      'Fixed: invite popup now shows the list name',
+    ]},
     { version: '1.21.0', date: '2026-05-24', changes: [
       'NEW: share a list with anyone by email — both of you edit, live',
       'A shared card shows a little people icon so you know it\'s not just yours',
@@ -5986,10 +5989,12 @@
     btn.disabled = true;
     btn.textContent = 'Sending…';
     try {
+      const list = getList(shareListId);
       const { error } = await supa.from('list_invites').insert({
         list_id: shareListId,
         invited_email: email,
         invited_by: authUser.id,
+        list_title: list ? list.name : null,
       });
       if (error) throw error;
       // Best-effort email notification via the existing Apps Script relay.
@@ -6037,7 +6042,7 @@
     const email = userEmail();
     if (!email) return;
     const { data } = await supa.from('list_invites')
-      .select('id, list_id, invited_email, invited_by, created_at, lists(title)')
+      .select('id, list_id, invited_email, invited_by, list_title, created_at')
       .ilike('invited_email', email)
       .is('accepted_at', null)
       .is('declined_at', null)
@@ -6046,7 +6051,7 @@
     if (!fresh.length) return;
     const inv = fresh[0];
     promptedInvites.add(inv.id);
-    const listName = (inv.lists && inv.lists.title) || 'a list';
+    const listName = inv.list_title || 'a list';
     showConfirm({
       title: 'List invite',
       message: 'You were invited to "' + listName + '". Add it to your account?',
