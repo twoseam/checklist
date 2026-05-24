@@ -100,6 +100,9 @@
   html {
     height: 100%;
     overflow: hidden;
+    /* Mirror the body's themed colour so pull-to-refresh on a fixed view
+       reveals the right colour underneath, not a white html element. */
+    background: var(--app-bg, #c0392b);
   }
 
   /* The animated gradient lives on <body> — the page's main background, which
@@ -2124,7 +2127,9 @@
     border-radius: 4px;
     background: var(--border-subtle);
     color: var(--text-dim);
+    text-decoration: none;
   }
+  .share-row .share-email { text-decoration: none; }
   .share-row .share-tag.you  { background: var(--brand-gradient); color: #fff; }
   .share-row .share-tag.pending { background: #f3a712; color: #fff; }
   .share-row .share-remove {
@@ -5644,7 +5649,14 @@
 
   function initSupa() {
     if (!window.supabase) return;          // CDN blocked → stay local-only
-    supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        storage: window.localStorage,
+      },
+    });
     supa.auth.onAuthStateChange((event, sess) => {
       const wasSignedIn = !!authUser;
       authUser = sess ? sess.user : null;
