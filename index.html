@@ -2122,6 +2122,27 @@
   .modal-btn-danger { background: var(--red); }
   .modal-btn-danger:hover { filter: brightness(0.92); }
 
+  /* Small destructive / neutral text links centred under the action row */
+  .modal-foot-link-row {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    margin-top: 16px;
+  }
+  .modal-foot-link-row:empty { display: none; }
+  .modal-link, .modal-link-danger {
+    background: none;
+    border: none;
+    font-family: inherit;
+    font-size: 0.74rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 2px 6px;
+  }
+  .modal-link { color: var(--text-dim); }
+  .modal-link-danger { color: var(--red); }
+  .modal-link:hover, .modal-link-danger:hover { text-decoration: underline; }
+
   /* Minimal confirm modal — no header, no message. Single big gradient
      primary button with a tiny text-link cancel underneath. */
   .modal.minimal { padding: 22px 22px 18px; max-width: 320px; }
@@ -2432,11 +2453,12 @@
     <label class="field-label">Color</label>
     <div class="color-picker" id="colorPicker"></div>
     <div class="modal-actions">
-      <button class="modal-btn-primary modal-btn-danger" id="listModalDelete" onclick="deleteFromModal()" style="margin-right:auto;display:none">Delete list</button>
-      <button class="modal-btn-secondary" id="listModalShare" onclick="openShareModal()" style="display:none">Share</button>
-      <button class="modal-btn-secondary" id="listModalLeave" onclick="leaveFromModal()" style="display:none">Leave</button>
-      <button class="modal-btn-secondary" onclick="closeListModal()">Cancel</button>
+      <button class="modal-btn-primary" id="listModalShare" onclick="openShareModal()" style="display:none">Share</button>
       <button class="modal-btn-primary" id="listModalSave" onclick="saveListModal()">Save</button>
+    </div>
+    <div class="modal-foot-link-row">
+      <button class="modal-link-danger" id="listModalDelete" onclick="deleteFromModal()" style="display:none">Delete list</button>
+      <button class="modal-link" id="listModalLeave" onclick="leaveFromModal()" style="display:none">Leave list</button>
     </div>
   </div>
 </div>
@@ -2480,6 +2502,9 @@
 <div class="card-menu" id="cardMenu">
   <button class="card-menu-item" data-act="edit" title="Edit list" aria-label="Edit list">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4.5L20 8.5 15.5 4 4 15.5V20z"/><path d="M13.5 6l4.5 4.5"/></svg>
+  </button>
+  <button class="card-menu-item" data-act="share" title="Share list" aria-label="Share list">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
   </button>
   <button class="card-menu-item danger" data-act="del" title="Delete list" aria-label="Delete list">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
@@ -2540,6 +2565,11 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.21.2', date: '2026-05-24', changes: [
+      'Share is now a top-level icon in the card ⋯ menu',
+      'Edit-list popup: Save and Share are the two big buttons; Delete is a small link at the bottom',
+      'Dropped the redundant Cancel button — the X closes the popup',
+    ]},
     { version: '1.21.1', date: '2026-05-24', changes: [
       'Fixed: invite popup now shows the list name',
     ]},
@@ -3978,14 +4008,18 @@
     if (!state.paletteOn[pickedColor]) pickedColor = 0;
     renderColorPicker();
     styleSaveBtn();
-    // Delete is owner-only; Share is owner-only; Leave is member-only.
-    // Sign-out users only see Delete (local-only lists have no concept of
-    // membership; treated as owned).
+    // Delete + Share are owner-only; Leave is member-only. Sign-out users
+    // only see Delete (local-only lists have no membership; treated as owned).
     const meta = list ? listMeta.get(list.id) : null;
     const iAmOwner = !list ? false : (!authUser || !meta || meta.owner_id === authUser.id);
-    document.getElementById('listModalDelete').style.display = (list && iAmOwner) ? '' : 'none';
-    document.getElementById('listModalShare').style.display = (list && authUser && iAmOwner) ? '' : 'none';
-    document.getElementById('listModalLeave').style.display = (list && authUser && !iAmOwner) ? '' : 'none';
+    const showDelete = !!(list && iAmOwner);
+    const showShare  = !!(list && authUser && iAmOwner);
+    const showLeave  = !!(list && authUser && !iAmOwner);
+    document.getElementById('listModalDelete').style.display = showDelete ? '' : 'none';
+    document.getElementById('listModalShare').style.display  = showShare  ? '' : 'none';
+    document.getElementById('listModalLeave').style.display  = showLeave  ? '' : 'none';
+    document.querySelector('#listModalOverlay .modal-foot-link-row').style.display =
+      (showDelete || showLeave) ? '' : 'none';
     document.getElementById('listModalOverlay').classList.add('open');
     const field = document.getElementById('listNameField');
     field.focus();
@@ -5038,6 +5072,7 @@
       closeCardMenu();
       if (id == null) return;
       if (act === 'edit') openListModal(id);
+      else if (act === 'share') openShareModal(id);
       else if (act === 'del') deleteList(id);
     });
   });
@@ -5906,17 +5941,18 @@
   // ---- Share modal ----
   let shareListId = null;
 
-  async function openShareModal() {
-    if (!editingListId) return;
+  async function openShareModal(idArg) {
+    const lid = idArg || editingListId;
+    if (!lid) return;
     if (!supa || !authUser) {
       showConfirm({ title: 'Sign in to share', message: 'Sharing a list needs a JotList account so we know who you are.', confirmText: 'OK', onConfirm: () => {} });
       return;
     }
-    if (!isOwnerOf({ id: editingListId })) {
+    if (!isOwnerOf({ id: lid })) {
       showConfirm({ title: 'Only the owner can invite', message: 'Ask the person who created this list to invite more people.', confirmText: 'OK', onConfirm: () => {} });
       return;
     }
-    shareListId = editingListId;
+    shareListId = lid;
     closeListModal();
     document.getElementById('shareEmailField').value = '';
     document.getElementById('shareModalOverlay').classList.add('open');
