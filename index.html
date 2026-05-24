@@ -591,39 +591,47 @@
 
   /* Playful round icon buttons on each card. */
   .card-icon-btn {
-    width: 28px;
+    width: 24px;
     height: 28px;
-    border-radius: 50%;
     border: none;
     padding: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    background: var(--accent-soft);
-    color: var(--accent);
-    transition: transform 0.13s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.13s;
+    background: none;
+    color: var(--text-dim);
+    opacity: 0.7;
+    transition: opacity 0.13s, transform 0.1s;
   }
 
-  .card-icon-btn:hover { transform: scale(1.18) rotate(-8deg); }
-  .card-icon-btn:active { transform: scale(0.88); }
-  .card-icon-btn.danger { background: var(--red-soft); color: var(--red); }
-  .card-icon-btn.danger:hover { transform: scale(1.18) rotate(8deg); }
+  .card-icon-btn:hover { opacity: 1; }
+  .card-icon-btn:active { transform: scale(0.9); }
+  .card-icon-btn.danger { color: var(--red); }
 
-  /* List card ⋯ menu */
+  /* List card ⋯ menu — slides down from above the card's top edge */
   .card-menu {
     position: fixed;
     z-index: 95;
-    display: none;
+    display: flex;
     flex-direction: row;
+    justify-content: center;
     gap: 2px;
     background: var(--surface);
     border-radius: var(--radius-sm);
-    box-shadow: 0 10px 30px rgba(0,0,0,0.26);
-    padding: 5px;
+    box-shadow: 0 8px 22px rgba(0,0,0,0.22);
+    padding: 5px 8px;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-18px);
+    transition: opacity 0.18s, transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 
-  .card-menu.open { display: flex; }
+  .card-menu.open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
 
   .card-menu-item {
     background: none;
@@ -3434,7 +3442,7 @@
   })();
 
   // --- Home view -----------------------------------------------------------
-  const MENU_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2.3"/><circle cx="12" cy="12" r="2.3"/><circle cx="19" cy="12" r="2.3"/></svg>`;
+  const MENU_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>`;
 
   // --- Home grid: cards pack top-left, in state.lists order ---------------
   // Phone shows 2 columns, a wide screen 4. Grid auto-flow packs the cards.
@@ -4314,10 +4322,21 @@
   function openCardMenu(listId, btn) {
     cardMenuListId = listId;
     const menu = document.getElementById('cardMenu');
-    const r = btn.getBoundingClientRect();
-    menu.style.top = (r.bottom + 6) + 'px';
-    menu.style.right = (window.innerWidth - r.right) + 'px';
+    const card = btn.closest('.list-card');
+    const r = (card || btn).getBoundingClientRect();
+    // Anchor the tray to the top edge of the card and centre it horizontally
+    // so it visually drops down onto the card.
+    menu.style.top = (r.top + 6) + 'px';
+    menu.style.left = (r.left + r.width / 2) + 'px';
+    menu.style.transform = '';   // allow CSS open-state transform to take over
+    menu.style.right = 'auto';
+    menu.style.marginLeft = '0';
     menu.classList.add('open');
+    // Centre via negative translateX after measuring its own width
+    requestAnimationFrame(() => {
+      const w = menu.offsetWidth;
+      menu.style.marginLeft = -(w / 2) + 'px';
+    });
   }
 
   function closeCardMenu() {
