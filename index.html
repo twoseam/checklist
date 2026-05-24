@@ -4808,11 +4808,10 @@
         // Pill in a tinted version of the list color
         const hex = listHex(list);
         btn.classList.add('list-view-shared-pill');
-        // Properly desaturated pastel from the list colour (~30% S, 92% L).
-        // Keeps the hue so it still reads as the list colour, but pale
-        // enough to stand off the list-coloured page background.
+        // Same hue + saturation, just lifted to ~92% lightness. Reads as a
+        // true lighter shade of the list colour, not a transparent overlay.
         const h = hexToHsl(hex);
-        btn.style.background = hslToHex(h.h, 30, 92);
+        btn.style.background = hslToHex(h.h, h.s, 92);
         btn.style.color = hex;
         btn.title = 'Shared with ' + sharedCount + ' ' + (sharedCount === 2 ? 'person' : 'people');
         btn.textContent = 'Shared';
