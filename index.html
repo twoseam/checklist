@@ -57,6 +57,9 @@
        Accent follows slot 1. Delete-red and complete-green are fixed, so
        those actions stay legible whatever the palette becomes. */
     --accent: var(--brand-1);
+    /* Brand wash — red-dominant, fades through orange to gold. Used on
+       every primary action button (Save, Sign in, Copy, Next, etc). */
+    --brand-gradient: linear-gradient(135deg, #c0392b 0%, #d9493a 30%, #e87a25 75%, #f3a712 100%);
     --accent-hover: color-mix(in srgb, var(--brand-1) 84%, #000);
     --accent-soft: color-mix(in srgb, var(--brand-1) 12%, transparent);
     --bg: var(--brand-1);
@@ -1396,8 +1399,8 @@
   .palette-btn:active { transform: scale(0.97); }
 
   .palette-btn.primary {
-    background: var(--accent);
-    border-color: var(--accent);
+    background: var(--brand-gradient);
+    border-color: transparent;
     color: #fff;
   }
 
@@ -2043,8 +2046,8 @@
     transition: filter 0.15s, background 0.15s;
   }
 
-  .modal-btn-primary { background: var(--accent); color: #fff; }
-  .modal-btn-primary:hover { filter: brightness(0.92); }
+  .modal-btn-primary { background: var(--brand-gradient); color: #fff; }
+  .modal-btn-primary:hover { filter: brightness(0.95); }
 
   .modal-btn-secondary { background: var(--border-subtle); color: var(--text-secondary); }
   .modal-btn-secondary:hover { background: #e8ddd3; }
@@ -2065,13 +2068,13 @@
     justify-content: stretch;
   }
   .modal.minimal .modal-btn-primary {
-    background: linear-gradient(135deg, #e87a25 0%, #f3a712 100%);
+    background: var(--brand-gradient);
     color: #fff;
     font-size: 1rem;
     font-weight: 800;
     padding: 16px 18px;
     border-radius: 12px;
-    box-shadow: 0 4px 14px rgba(232, 122, 37, 0.30);
+    box-shadow: 0 4px 14px rgba(192, 57, 43, 0.30);
   }
   .modal.minimal .modal-btn-primary:hover { filter: brightness(0.95); }
   .modal.minimal .modal-btn-secondary {
@@ -2399,6 +2402,10 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.18.4', date: '2026-05-23', changes: [
+      'All primary buttons share the red→gold brand wash',
+      'New-list modal centred again, with extra room for the keyboard bar',
+    ]},
     { version: '1.18.3', date: '2026-05-23', changes: [
       'Press Enter to confirm any popup',
       'Copy button now glows orange→gold',
