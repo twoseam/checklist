@@ -2451,6 +2451,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.18.9', date: '2026-05-23', changes: [
+      'Link detection catches bare domains too — jotlist.io, anthropic.ai, linktr.ee, etc.',
+    ]},
     { version: '1.18.8', date: '2026-05-23', changes: [
       'URLs in tasks are now clickable — tap opens an Open / Copy / Cancel popup',
       'Two-finger back-swipe now beats Safari to the punch and actually animates the view',
@@ -2887,25 +2890,40 @@
     return d.innerHTML;
   }
 
-  // Escape text and wrap any http(s) URLs in a .task-link span. The URL is
-  // kept on `data-url` so the click handler has the un-escaped original
-  // (innerText would lose &amp; etc).
+  // Auto-detect links inside task text and wrap them in <a class="task-link">.
+  // Three accepted shapes:
+  //   • full URL          —  https://example.com/path
+  //   • www-prefixed      —  www.example.com
+  //   • bare domain       —  example.com   (TLD must be on the curated list
+  //                                          so we don't link "v1.16.2")
+  const LINK_TLDS = 'com|org|net|edu|gov|mil|info|biz|name|pro|io|co|app|dev|ai|me|to|so|gg|tv|cc|fm|ly|ee|tt|ws|gd|la|am|sh|ms|nu|st|ag|al|im|md|si|sk|si|xyz|uk|us|ca|au|de|fr|jp|cn|in|it|es|nl|se|no|fi|dk|ie|nz|be|pl|cz|hu|ro|gr|pt|hr|bg|ru|hk|tw|sg|kr|my|th|ph|vn|tr|il|ae|sa|za|br|ar|cl|mx|uy|pe|ve|design|shop|store|blog|news|tech|cloud|page|live|run|club|chat|email|games|guide|host|land|life|link|online|sale|services|site|space|studio|tools|wiki|works|world|video|press|earth|home|software|codes|group|family|network|foundation|community|company|center|today|world|works|works|zone|art|fit|kids|news|press|red|sex|tax';
+  const LINK_RE = new RegExp(
+    '\\b(' +
+      'https?:\\/\\/[^\\s<]+' +                                // http(s)://...
+      '|' +
+      'www\\.[^\\s<]+\\.[a-z]{2,}(?:\\/[^\\s<]*)?' +           // www.X.tld
+      '|' +
+      '(?:[a-z0-9][a-z0-9-]*\\.)+(?:' + LINK_TLDS + ')\\b(?:\\/[^\\s<]*)?' +
+    ')',
+    'gi'
+  );
+
   function linkify(s) {
     const escaped = esc(String(s || ''));
-    return escaped.replace(/\b(https?:\/\/[^\s<]+)/gi, (m) => {
-      // Trim common trailing punctuation that's more likely sentence
-      // grammar than part of the URL.
+    return escaped.replace(LINK_RE, (m) => {
+      // Trim trailing punctuation that's almost certainly sentence grammar,
+      // not part of the URL.
       let url = m, tail = '';
-      const trailing = /[.,;:!?)\]}'"]+$/;
-      const t = trailing.exec(url);
+      const t = /[.,;:!?)\]}'"]+$/.exec(url);
       if (t) { tail = t[0]; url = url.slice(0, -tail.length); }
-      // url and tail are already HTML-escaped (esc above ran first), but the
-      // raw URL we hand to navigator/window.open needs the un-escaped form.
+      // The matched string was HTML-escaped above; un-escape for the raw
+      // href / clipboard payload (innerText would otherwise produce &amp;).
       const raw = url.replace(/&amp;/g, '&').replace(/&lt;/g, '<')
                      .replace(/&gt;/g, '>').replace(/&quot;/g, '"')
                      .replace(/&#39;/g, "'");
-      const safe = raw.replace(/"/g, '&quot;');
-      return '<a class="task-link" href="' + safe + '" data-url="' + safe
+      const href = /^https?:\/\//i.test(raw) ? raw : 'https://' + raw;
+      const hrefAttr = href.replace(/"/g, '&quot;');
+      return '<a class="task-link" href="' + hrefAttr + '" data-url="' + hrefAttr
         + '" target="_blank" rel="noopener noreferrer">' + url + '</a>' + tail;
     });
   }
