@@ -2462,6 +2462,10 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.20.0', date: '2026-05-24', changes: [
+      'Quieter sync — only changed lists go up to the cloud now',
+      'Groundwork for shared lists — coming soon',
+    ]},
     { version: '1.19.0', date: '2026-05-23', changes: [
       'Dark mode is per-device now — your phone and laptop can disagree',
     ]},
@@ -5268,7 +5272,78 @@
   let cloudTimer = null;      // debounce handle for cloud saves
   let adoptingCloud = false;  // true while we're loading data down from the cloud
   let cloudChannel = null;    // realtime subscription, or null
-  let lastPushedJson = '';    // our own last write — so we ignore its echo
+
+  // Per-list diff snapshots — only push lists whose content / layout actually
+  // changed since the last sync. Keys are list ids; values are sorted-JSON.
+  let lastListSnap = new Map();
+  let lastViewSnap = new Map();
+  let lastSettingsSnap = '';
+
+  // Fields that have dedicated columns. Anything else on a list rides along
+  // inside lists.payload jsonb so new fields don't need a schema change.
+  const LIST_KNOWN_FIELDS = new Set([
+    'id', 'name', 'title', 'color',
+    'todos', 'completed',
+    'size', 'gx', 'gy',
+  ]);
+
+  function listPayload(l) {
+    const p = {};
+    for (const k in l) if (!LIST_KNOWN_FIELDS.has(k)) p[k] = l[k];
+    return p;
+  }
+
+  function listContentJson(l) {
+    return sortedJson({
+      title: l.name,
+      color: String(l.color),
+      todos: l.todos || [],
+      completed: l.completed || [],
+      payload: listPayload(l),
+    });
+  }
+
+  function listViewJson(l) {
+    return sortedJson({
+      gx: (l.gx == null) ? null : l.gx,
+      gy: (l.gy == null) ? null : l.gy,
+      size: (l.size === 2) ? 2 : 1,
+    });
+  }
+
+  // The portion of state.* that lives in user_data (everything except lists),
+  // plus a `list_order` array so the home grid sorts the same on every device.
+  function settingsObject(s) {
+    const out = {};
+    for (const k in s) if (k !== 'lists') out[k] = s[k];
+    out.list_order = (s.lists || []).map(l => l.id);
+    return out;
+  }
+
+  // Order-insensitive JSON. Supabase jsonb does not preserve object key
+  // order, so a plain JSON.stringify of an echoed write never matches what
+  // we sent — sort keys so the comparison is reliable.
+  function sortedJson(v) {
+    if (Array.isArray(v)) return '[' + v.map(sortedJson).join(',') + ']';
+    if (v && typeof v === 'object') {
+      return '{' + Object.keys(v).sort().map(function (k) {
+        return JSON.stringify(k) + ':' + sortedJson(v[k]);
+      }).join(',') + '}';
+    }
+    return JSON.stringify(v);
+  }
+
+  // Re-seed the diff snapshots from whatever state currently holds. Called
+  // right after a fresh pull so the next push knows what's already up there.
+  function snapshotCloudState() {
+    lastListSnap.clear();
+    lastViewSnap.clear();
+    state.lists.forEach(l => {
+      lastListSnap.set(l.id, listContentJson(l));
+      lastViewSnap.set(l.id, listViewJson(l));
+    });
+    lastSettingsSnap = sortedJson(settingsObject(state));
+  }
 
   function initSupa() {
     if (!window.supabase) return;          // CDN blocked → stay local-only
@@ -5283,6 +5358,9 @@
       } else if (!authUser) {
         // No session — never leave the account's lists on screen.
         if (cloudChannel) { supa.removeChannel(cloudChannel); cloudChannel = null; }
+        lastListSnap.clear();
+        lastViewSnap.clear();
+        lastSettingsSnap = '';
         restoreBrowserState();
       }
     });
@@ -5315,47 +5393,122 @@
     goHome();
   }
 
-  // Bring the signed-in user's lists down from the cloud.
+  // Build a list object (state.lists item) from one cloud row + its view row.
+  function assembleList(row, view) {
+    const payload = (row.payload && typeof row.payload === 'object') ? row.payload : {};
+    const merged = Object.assign({}, payload, {
+      id: row.id,
+      name: row.title,
+      color: parseInt(row.color, 10) || 0,
+      todos: Array.isArray(row.todos) ? row.todos : [],
+      completed: Array.isArray(row.completed) ? row.completed : [],
+      size: view && Number(view.size) === 2 ? 2 : 1,
+    });
+    if (view && view.gx != null) merged.gx = view.gx;
+    if (view && view.gy != null) merged.gy = view.gy;
+    return merged;
+  }
+
+  // Pull everything from the cloud and return { settings, lists }. Lists are
+  // sorted by the user's per-device list_order (settings.list_order), with
+  // any unknown ids appended in the order Postgres returned them.
+  async function fetchCloudState() {
+    const ud = await supa
+      .from('user_data').select('state').eq('user_id', authUser.id).maybeSingle();
+    let settings = (ud.data && ud.data.state) || {};
+    if ('lists' in settings) { settings = Object.assign({}, settings); delete settings.lists; }
+
+    const memb = await supa.from('list_members').select('list_id').eq('user_id', authUser.id);
+    const ids = (memb.data || []).map(m => m.list_id);
+    if (!ids.length) return { settings: settings, lists: [] };
+
+    const [lr, vr] = await Promise.all([
+      supa.from('lists').select('*').in('id', ids),
+      supa.from('user_list_view').select('*').eq('user_id', authUser.id).in('list_id', ids),
+    ]);
+    const rows = lr.data || [];
+    const viewMap = new Map((vr.data || []).map(v => [v.list_id, v]));
+
+    let lists = rows.map(r => assembleList(r, viewMap.get(r.id)));
+    const order = Array.isArray(settings.list_order) ? settings.list_order : [];
+    const orderIdx = new Map(order.map((id, i) => [id, i]));
+    lists.sort((a, b) => {
+      const ai = orderIdx.has(a.id) ? orderIdx.get(a.id) : 1e9;
+      const bi = orderIdx.has(b.id) ? orderIdx.get(b.id) : 1e9;
+      return ai - bi;
+    });
+    return { settings: settings, lists: lists };
+  }
+
+  // First pull on sign-in — replaces state, resets history, navigates home.
   async function pullCloud() {
     if (!supa || !authUser) return;
     try {
-      const { data, error } = await supa
-        .from('user_data').select('state').eq('user_id', authUser.id).maybeSingle();
-      if (error) return;
-      if (data && data.state && Array.isArray(data.state.lists)) {
-        adoptingCloud = true;
-        state = normalizeState(data.state);
+      adoptingCloud = true;
+      const { settings, lists } = await fetchCloudState();
+
+      if (lists.length === 0) {
+        // Brand-new account: seed default starter lists, then push them up.
+        state = normalizeState(Object.assign({}, settings, {
+          lists: [
+            newList('List 1', 0, DEFAULT_TODOS),
+            newList('List 2', 1, DEFAULT_TODOS),
+          ],
+        }));
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-        adoptingCloud = false;
+        lastListSnap.clear();
+        lastViewSnap.clear();
+        lastSettingsSnap = '';
         resetHistory();
         applyPalette();
         applyDark();
         activeListId = null;
         goHome();
-        offerGuestMerge();
-      } else {
-        // First sign-in for this account — no cloud row yet. Start from
-        // empty starter lists, not whatever stale state is cached in this
-        // browser (which may belong to a previously-signed-in user — that's
-        // how account A's lists can leak into account B's first sign-in).
-        // offerGuestMerge runs after, so the user can still pull their
-        // browser-only lists in if any are genuinely theirs.
-        adoptingCloud = true;
-        state = normalizeState({ lists: [
-          newList('List 1', 0, DEFAULT_TODOS),
-          newList('List 2', 1, DEFAULT_TODOS),
-        ]});
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
         adoptingCloud = false;
-        resetHistory();
-        applyPalette();
-        applyDark();
-        activeListId = null;
-        goHome();
         pushCloud();
         offerGuestMerge();
+        return;
       }
-    } catch (e) { console.warn('JotList pullCloud:', e); }
+
+      state = normalizeState(Object.assign({}, settings, { lists: lists }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      snapshotCloudState();
+      resetHistory();
+      applyPalette();
+      applyDark();
+      activeListId = null;
+      goHome();
+      offerGuestMerge();
+    } catch (e) {
+      console.warn('JotList pullCloud:', e);
+    } finally {
+      adoptingCloud = false;
+    }
+  }
+
+  // Lightweight pull triggered by a realtime event — refresh state without
+  // navigating away or resetting undo history. Bails out cleanly if nothing
+  // actually differs (which is how we ignore the echo of our own writes).
+  async function refreshFromCloud() {
+    if (!supa || !authUser || adoptingCloud) return;
+    try {
+      adoptingCloud = true;
+      const { settings, lists } = await fetchCloudState();
+      const next = normalizeState(Object.assign({}, settings, { lists: lists }));
+      if (sortedJson(next) === sortedJson(state)) return;
+      state = next;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      snapshotCloudState();
+      applyPalette();
+      applyDark();
+      if (activeListId && !getList(activeListId)) { activeListId = null; goHome(); return; }
+      if (activeListId && activeList()) themeList(listHex(activeList()));
+      render();
+    } catch (e) {
+      console.warn('JotList refreshFromCloud:', e);
+    } finally {
+      adoptingCloud = false;
+    }
   }
 
   // After sign-in, the account's lists replace the browser's. If the browser
@@ -5369,10 +5522,6 @@
       if (b && Array.isArray(b.lists)) browserLists = b.lists;
     } catch (e) {}
     const accountIds = new Set(state.lists.map(l => l.id));
-    // Skip any list the account already has, plus starter lists the user
-    // never touched (default name, no completed items, and todos still equal
-    // DEFAULT_TODOS verbatim). Those are first-visit placeholders, not the
-    // user's content — offering to merge them is just noise.
     const defaults = ['List 1', 'List 2', 'JotList', 'JotList 1', 'JotList 2'];
     const isStarter = l => {
       if (defaults.indexOf(l.name) < 0) return false;
@@ -5412,55 +5561,114 @@
     cloudTimer = setTimeout(pushCloud, 800);
   }
 
-  // Order-insensitive JSON. Supabase jsonb does not preserve object key
-  // order, so a plain JSON.stringify of an echoed write never matches what
-  // we sent — sort keys so the comparison is reliable.
-  function sortedJson(v) {
-    if (Array.isArray(v)) return '[' + v.map(sortedJson).join(',') + ']';
-    if (v && typeof v === 'object') {
-      return '{' + Object.keys(v).sort().map(function (k) {
-        return JSON.stringify(k) + ':' + sortedJson(v[k]);
-      }).join(',') + '}';
-    }
-    return JSON.stringify(v);
-  }
-
+  // Push only what changed. Settings (palette / list order / etc) → user_data;
+  // list content → lists; list layout → user_list_view; removed lists → DELETE.
   async function pushCloud() {
     if (!supa || !authUser) return;
-    lastPushedJson = sortedJson(state);
     try {
-      await supa.from('user_data').upsert({
-        user_id: authUser.id,
-        state: state,
-        updated_at: new Date().toISOString(),
-      });
-    } catch (e) {}
+      // 1) Settings (includes list_order so home-screen order syncs)
+      const settingsJson = sortedJson(settingsObject(state));
+      if (settingsJson !== lastSettingsSnap) {
+        await supa.from('user_data').upsert({
+          user_id: authUser.id,
+          state: JSON.parse(settingsJson),
+          updated_at: new Date().toISOString(),
+        });
+        lastSettingsSnap = settingsJson;
+      }
+
+      // 2) Deletions — IDs we knew about that are gone from state.lists now.
+      // RLS lets the owner delete the list (cascades members + views). For
+      // Phase 2 every list a user has IS owned by them — Phase 3 will handle
+      // the leave-a-shared-list case (delete only the membership row).
+      const currentIds = new Set(state.lists.map(l => l.id));
+      const toDelete = [];
+      lastListSnap.forEach((_, id) => { if (!currentIds.has(id)) toDelete.push(id); });
+      if (toDelete.length) {
+        await supa.from('lists').delete().in('id', toDelete);
+        toDelete.forEach(id => { lastListSnap.delete(id); lastViewSnap.delete(id); });
+      }
+
+      // 3) Inserts + content updates.
+      const inserts = [];
+      const insertMembers = [];
+      const updates = [];
+      for (const l of state.lists) {
+        const j = listContentJson(l);
+        if (lastListSnap.get(l.id) === j) continue;
+        const parsed = JSON.parse(j);
+        const row = {
+          id: l.id,
+          title: parsed.title,
+          color: parsed.color,
+          todos: parsed.todos,
+          completed: parsed.completed,
+          payload: parsed.payload,
+        };
+        if (!lastListSnap.has(l.id)) {
+          inserts.push(Object.assign({ owner_id: authUser.id }, row));
+          insertMembers.push({ list_id: l.id, user_id: authUser.id, role: 'owner' });
+        } else {
+          updates.push(row);
+        }
+        lastListSnap.set(l.id, j);
+      }
+      if (inserts.length) {
+        const ins = await supa.from('lists').insert(inserts);
+        if (!ins.error && insertMembers.length) {
+          await supa.from('list_members').insert(insertMembers);
+        }
+      }
+      for (const u of updates) {
+        const { id, ...rest } = u;
+        await supa.from('lists').update(rest).eq('id', id);
+      }
+
+      // 4) Per-user layout (position + size).
+      const viewUpserts = [];
+      for (const l of state.lists) {
+        const j = listViewJson(l);
+        if (lastViewSnap.get(l.id) === j) continue;
+        const parsed = JSON.parse(j);
+        viewUpserts.push({
+          user_id: authUser.id,
+          list_id: l.id,
+          gx: parsed.gx,
+          gy: parsed.gy,
+          size: parsed.size,
+        });
+        lastViewSnap.set(l.id, j);
+      }
+      if (viewUpserts.length) {
+        await supa.from('user_list_view').upsert(viewUpserts);
+      }
+    } catch (e) {
+      console.warn('JotList pushCloud:', e);
+    }
   }
 
-  // Live sync: when another device changes the data, pull it in immediately.
+  // Realtime: any change to my lists / memberships / views / settings → refresh.
   function subscribeCloud() {
     if (!supa || !authUser) return;
     if (cloudChannel) { supa.removeChannel(cloudChannel); cloudChannel = null; }
+    let pending = null;
+    const debouncedRefresh = () => {
+      clearTimeout(pending);
+      pending = setTimeout(refreshFromCloud, 300);
+    };
     cloudChannel = supa.channel('sync-' + authUser.id)
       .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'lists' },
+        debouncedRefresh)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'list_members', filter: 'user_id=eq.' + authUser.id },
+        debouncedRefresh)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'user_list_view', filter: 'user_id=eq.' + authUser.id },
+        debouncedRefresh)
+      .on('postgres_changes',
         { event: '*', schema: 'public', table: 'user_data', filter: 'user_id=eq.' + authUser.id },
-        payload => {
-          const incoming = payload.new && payload.new.state;
-          if (!incoming || !Array.isArray(incoming.lists)) return;
-          // Ignore the echo of our own writes and any no-op change. Undo
-          // history is deliberately NOT reset here, so a sync round-trip
-          // never wipes the undo stack.
-          const inc = sortedJson(incoming);
-          if (inc === lastPushedJson || inc === sortedJson(state)) return;
-          adoptingCloud = true;
-          state = normalizeState(incoming);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-          adoptingCloud = false;
-          applyPalette();
-          applyDark();
-          if (activeListId && activeList()) themeList(listHex(activeList()));
-          render();
-        })
+        debouncedRefresh)
       .subscribe();
   }
 
