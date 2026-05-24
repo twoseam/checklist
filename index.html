@@ -331,28 +331,49 @@
     aspect-ratio: auto;
   }
 
-  /* Corner resize handle */
+  /* Corner resize handles — one per corner, all four toggle 1x1 <-> 2x2. */
   .card-resize {
     position: absolute;
-    right: 0;
-    bottom: 0;
     width: 28px;
     height: 28px;
     z-index: 4;
-    cursor: nwse-resize;
     touch-action: none;
   }
+  .card-resize.br { right: 0; bottom: 0; cursor: nwse-resize; }
+  .card-resize.bl { left:  0; bottom: 0; cursor: nesw-resize; }
+  .card-resize.tr { right: 0; top:    0; cursor: nesw-resize; }
+  .card-resize.tl { left:  0; top:    0; cursor: nwse-resize; }
 
   .card-resize::after {
     content: '';
     position: absolute;
-    right: 6px;
-    bottom: 6px;
     width: 9px;
     height: 9px;
-    border-right: 2.5px solid color-mix(in srgb, var(--text-secondary) 65%, transparent);
-    border-bottom: 2.5px solid color-mix(in srgb, var(--text-secondary) 65%, transparent);
+    color: color-mix(in srgb, var(--text-secondary) 65%, transparent);
+  }
+  .card-resize.br::after {
+    right: 6px; bottom: 6px;
+    border-right: 2.5px solid currentColor;
+    border-bottom: 2.5px solid currentColor;
     border-bottom-right-radius: 3px;
+  }
+  .card-resize.bl::after {
+    left: 6px; bottom: 6px;
+    border-left: 2.5px solid currentColor;
+    border-bottom: 2.5px solid currentColor;
+    border-bottom-left-radius: 3px;
+  }
+  .card-resize.tr::after {
+    right: 6px; top: 6px;
+    border-right: 2.5px solid currentColor;
+    border-top: 2.5px solid currentColor;
+    border-top-right-radius: 3px;
+  }
+  .card-resize.tl::after {
+    left: 6px; top: 6px;
+    border-left: 2.5px solid currentColor;
+    border-top: 2.5px solid currentColor;
+    border-top-left-radius: 3px;
   }
 
   /* On hover-capable devices the grip only shows on hover; touch keeps it
@@ -365,15 +386,17 @@
     /* A finger needs a bigger target than a mouse — grow the hit area and
        lift the grip's contrast so it's easier to grab. */
     .card-resize { width: 40px; height: 40px; }
-    .card-resize::after {
-      right: 8px;
-      bottom: 8px;
+    .card-resize.br::after, .card-resize.bl::after,
+    .card-resize.tr::after, .card-resize.tl::after {
       width: 11px;
       height: 11px;
-      border-right-width: 3px;
-      border-bottom-width: 3px;
+      border-width: 3px;
       opacity: 0.5;
     }
+    .card-resize.br::after { right: 8px; bottom: 8px; }
+    .card-resize.bl::after { left:  8px; bottom: 8px; }
+    .card-resize.tr::after { right: 8px; top:    8px; }
+    .card-resize.tl::after { left:  8px; top:    8px; }
   }
 
   /* Ghost slots shown while a card is being resized or reordered —
@@ -529,6 +552,7 @@
     font-size: 0.95rem;
     font-weight: 700;
     color: var(--text);
+    transition: font-size 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 
   /* Scale the title up on a 2x2 card so it reads right at the larger size. */
@@ -2246,6 +2270,10 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.17.3', date: '2026-05-23', changes: [
+      'Resize a card from either bottom corner — drag or tap to toggle 2×2',
+      'Smoother title size-up when a card grows to 2×2',
+    ]},
     { version: '1.17.2', date: '2026-05-23', changes: [
       'Hold-still on a task → offer to copy it to the clipboard',
       'New-list modal now pops the keyboard right away',
@@ -2839,14 +2867,15 @@
               </div>
             </div>
           </div>
-          <div class="card-resize" title="Drag to resize"></div>
+          <div class="card-resize br" title="Drag to resize"></div>
+          <div class="card-resize bl" title="Drag to resize"></div>
         </div>`;
 
       card.querySelector('[data-act="menu"]').addEventListener('click', e => {
         e.stopPropagation();
         openCardMenu(list.id, e.currentTarget);
       });
-      attachCardResize(card.querySelector('.card-resize'), list);
+      card.querySelectorAll('.card-resize').forEach(g => attachCardResize(g, list));
 
       // The 2x2 preview is live — tap the checkbox to tick a task off.
       // Only the box, so a task is never checked by a stray tap on the row.
@@ -3002,6 +3031,10 @@
 
   function attachCardResize(handle, list) {
     if (!handle) return;
+    // Each corner grip drags outward from itself: BR pulls down-right,
+    // TL pulls up-left, etc. dirX/dirY map the corner to a sign.
+    const dirX = handle.classList.contains('bl') || handle.classList.contains('tl') ? -1 : 1;
+    const dirY = handle.classList.contains('tr') || handle.classList.contains('tl') ? -1 : 1;
     handle.addEventListener('pointerdown', e => {
       e.preventDefault();
       e.stopPropagation();
@@ -3011,6 +3044,7 @@
       resizeState = {
         list, card: handle.closest('.list-card'),
         x0: e.clientX, y0: e.clientY, cell,
+        dirX, dirY,
         tDown: Date.now(), moved: false,
       };
       grid.classList.add('resizing');
@@ -3023,12 +3057,15 @@
 
   function onResizeMove(e) {
     if (!resizeState) return;
-    const { card, cell } = resizeState;
+    const { card, cell, dirX, dirY } = resizeState;
     if (Math.abs(e.clientX - resizeState.x0) > 6
         || Math.abs(e.clientY - resizeState.y0) > 6) {
       resizeState.moved = true;
     }
-    const reach = Math.max(e.clientX - resizeState.x0, e.clientY - resizeState.y0);
+    // Project the drag onto the grip's outward axis. Positive reach = grow.
+    const dx = (e.clientX - resizeState.x0) * dirX;
+    const dy = (e.clientY - resizeState.y0) * dirY;
+    const reach = Math.max(dx, dy);
     const isBig = card.classList.contains('big');
     let want = isBig;
     // A small drag triggers the resize — the old 40% was hard to hit.
