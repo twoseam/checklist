@@ -2043,6 +2043,63 @@
     display: flex;
     justify-content: flex-end;
     gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  /* Share-list modal: members + pending invites rows */
+  .share-members, .share-invites {
+    margin: 6px 0 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .share-members:empty, .share-invites:empty { display: none; }
+  .share-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 2px;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+  }
+  .share-row .share-email { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .share-row .share-tag {
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--border-subtle);
+    color: var(--text-dim);
+  }
+  .share-row .share-tag.you  { background: var(--brand-gradient); color: #fff; }
+  .share-row .share-tag.pending { background: #f3a712; color: #fff; }
+  .share-row .share-remove {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 2px 6px;
+    line-height: 1;
+  }
+  .share-row .share-remove:hover { color: var(--red); }
+
+  /* Tiny "people" icon on a list card to signal it's shared */
+  .card-shared-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 22px;
+    height: 22px;
+    border-radius: 11px;
+    background: rgba(255,255,255,0.28);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    pointer-events: none;
   }
 
   .modal-btn-primary, .modal-btn-secondary {
@@ -2376,8 +2433,29 @@
     <div class="color-picker" id="colorPicker"></div>
     <div class="modal-actions">
       <button class="modal-btn-primary modal-btn-danger" id="listModalDelete" onclick="deleteFromModal()" style="margin-right:auto;display:none">Delete list</button>
+      <button class="modal-btn-secondary" id="listModalShare" onclick="openShareModal()" style="display:none">Share</button>
+      <button class="modal-btn-secondary" id="listModalLeave" onclick="leaveFromModal()" style="display:none">Leave</button>
       <button class="modal-btn-secondary" onclick="closeListModal()">Cancel</button>
       <button class="modal-btn-primary" id="listModalSave" onclick="saveListModal()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- SHARE LIST MODAL -->
+<div class="overlay" id="shareModalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Share list</span>
+      <button class="modal-close" onclick="closeShareModal()" title="Close">×</button>
+    </div>
+    <p class="confirm-message" id="shareIntro">Invite someone by email — they'll see the list as soon as they accept.</p>
+    <div id="shareMembers" class="share-members"></div>
+    <label class="field-label">Invite by email</label>
+    <input type="email" class="list-name-field" id="shareEmailField" placeholder="name@example.com" autocomplete="off">
+    <div id="shareInvites" class="share-invites"></div>
+    <div class="modal-actions">
+      <button class="modal-btn-secondary" onclick="closeShareModal()">Done</button>
+      <button class="modal-btn-primary" id="shareSendBtn" onclick="sendInvite()">Send invite</button>
     </div>
   </div>
 </div>
@@ -2462,6 +2540,12 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.21.0', date: '2026-05-24', changes: [
+      'NEW: share a list with anyone by email — both of you edit, live',
+      'A shared card shows a little people icon so you know it\'s not just yours',
+      'Leave a shared list any time from its Edit screen',
+      'If the owner deletes a shared list, you\'re asked whether to keep a copy or let it go',
+    ]},
     { version: '1.20.3', date: '2026-05-24', changes: [
       'Fixed: drag-to-reorder cards actually saves the new order now',
     ]},
@@ -3304,9 +3388,16 @@
       const card = document.createElement('div');
       card.className = 'list-card' + (big ? ' big' : '');
       card.setAttribute('data-list-id', list.id);
+      const meta = listMeta.get(list.id);
+      const sharedCount = meta ? meta.members.length : 1;
+      const sharedBadge = sharedCount > 1
+        ? `<div class="card-shared-badge" title="Shared with ${sharedCount} ${sharedCount === 2 ? 'person' : 'people'}">`
+          + `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5"/><circle cx="17" cy="7" r="2.6"/><path d="M15 13c3 0 6 1.6 6 4.5"/></svg>`
+          + `</div>` : '';
       card.innerHTML = `
         <div class="card-inner">
           <div class="list-card-stripe" style="background:${listHex(list)}"></div>
+          ${sharedBadge}
           <div class="list-card-body">
             <div class="list-card-head">
               <span class="list-card-name">${esc(list.name)}</span>
@@ -3824,18 +3915,26 @@
   function deleteList(id) {
     const list = getList(id);
     if (!list) return;
+    const meta = listMeta.get(id);
+    const isShared = meta && meta.members.length > 1;
+    const message = isShared
+      ? `"${list.name}" is shared. Deleting it removes it from your account and asks every other person whether they want to keep a copy.`
+      : `Delete "${list.name}"? This removes all of its tasks and history.`;
     showConfirm({
-      title: 'Delete list',
-      message: `Delete "${list.name}"? This removes all of its tasks and history.`,
-      confirmText: 'Delete list',
+      title: isShared ? 'Delete shared list' : 'Delete list',
+      message: message,
+      confirmText: isShared ? 'Delete for everyone' : 'Delete list',
       danger: true,
       onConfirm: () => {
+        if (isShared) {
+          softDeleteSharedList(list);
+          return;
+        }
         state.lists = state.lists.filter(l => l.id !== id);
         if (state.lists.length === 0) {
           state.lists.push(newList('List 1', 0, []));
         }
         saveState();
-        // If the open list was the one deleted, fall back to the home view.
         if (activeListId === id) goHome();
         else renderHome();
       },
@@ -3876,9 +3975,15 @@
     if (!state.paletteOn[pickedColor]) pickedColor = 0;
     renderColorPicker();
     styleSaveBtn();
-    document.getElementById('listModalDelete').style.display = editingListId ? '' : 'none';
+    // Delete is owner-only; Share is owner-only; Leave is member-only.
+    // Sign-out users only see Delete (local-only lists have no concept of
+    // membership; treated as owned).
+    const meta = list ? listMeta.get(list.id) : null;
+    const iAmOwner = !list ? false : (!authUser || !meta || meta.owner_id === authUser.id);
+    document.getElementById('listModalDelete').style.display = (list && iAmOwner) ? '' : 'none';
+    document.getElementById('listModalShare').style.display = (list && authUser && iAmOwner) ? '' : 'none';
+    document.getElementById('listModalLeave').style.display = (list && authUser && !iAmOwner) ? '' : 'none';
     document.getElementById('listModalOverlay').classList.add('open');
-    // Focus synchronously so the mobile keyboard rises right away.
     const field = document.getElementById('listNameField');
     field.focus();
     if (editingListId) field.select();
@@ -4884,6 +4989,13 @@
   function closeConfirm() {
     document.getElementById('confirmOverlay').classList.remove('open');
     confirmAction = null;
+    confirmExtraAction = null;
+    // After any confirm dialog closes, see if a sharing prompt is queued —
+    // multiple invites or fork prompts surface one at a time.
+    setTimeout(() => {
+      if (typeof checkPendingInvites === 'function') checkPendingInvites();
+      if (typeof checkPendingForks === 'function') checkPendingForks();
+    }, 200);
   }
 
   function runConfirm() {
@@ -5288,6 +5400,11 @@
   let lastViewSnap = new Map();
   let lastSettingsSnap = '';
 
+  // Phase-3 metadata that lives alongside state.lists but is NOT part of
+  // the synced content (so it stays out of payload jsonb). Keyed by list id.
+  // Value: { owner_id, members:[{user_id,role}], pending_fork_at }
+  let listMeta = new Map();
+
   // Fields that have dedicated columns. Anything else on a list rides along
   // inside lists.payload jsonb so new fields don't need a schema change.
   const LIST_KNOWN_FIELDS = new Set([
@@ -5370,6 +5487,7 @@
         lastListSnap.clear();
         lastViewSnap.clear();
         lastSettingsSnap = '';
+        listMeta.clear();
         restoreBrowserState();
       }
     });
@@ -5442,17 +5560,36 @@
     const memb = await supa.from('list_members').select('list_id').eq('user_id', authUser.id);
     const ids = (memb.data || []).map(m => m.list_id);
     if (!ids.length) {
-      return { settings: settings, lists: [], orderInCloud: hadExplicitOrder };
+      return { settings: settings, lists: [], orderInCloud: hadExplicitOrder, listMeta: new Map() };
     }
 
-    const [lr, vr] = await Promise.all([
+    const [lr, vr, amr] = await Promise.all([
       supa.from('lists').select('*').in('id', ids),
       supa.from('user_list_view').select('*').eq('user_id', authUser.id).in('list_id', ids),
+      // All members of the lists I'm in — Phase 3's "see members of my lists"
+      // policy makes this readable. Used to show member rows in the share
+      // modal and the people-icon on shared cards.
+      supa.from('list_members').select('list_id,user_id,role').in('list_id', ids),
     ]);
     const rows = lr.data || [];
     const viewMap = new Map((vr.data || []).map(v => [v.list_id, v]));
 
-    let lists = rows.map(r => assembleList(r, viewMap.get(r.id)));
+    const memberMap = new Map();
+    (amr.data || []).forEach(m => {
+      if (!memberMap.has(m.list_id)) memberMap.set(m.list_id, []);
+      memberMap.get(m.list_id).push({ user_id: m.user_id, role: m.role });
+    });
+
+    const newMeta = new Map();
+    let lists = rows.map(r => {
+      newMeta.set(r.id, {
+        owner_id: r.owner_id,
+        members: memberMap.get(r.id) || [],
+        pending_fork_at: r.pending_fork_at || null,
+      });
+      return assembleList(r, viewMap.get(r.id));
+    });
+
     const order = Array.isArray(settings.list_order) ? settings.list_order : [];
     const orderIdx = new Map(order.map((id, i) => [id, i]));
     lists.sort((a, b) => {
@@ -5460,7 +5597,7 @@
       const bi = orderIdx.has(b.id) ? orderIdx.get(b.id) : 1e9;
       return ai - bi;
     });
-    return { settings: settings, lists: lists, orderInCloud: hadExplicitOrder };
+    return { settings: settings, lists: lists, orderInCloud: hadExplicitOrder, listMeta: newMeta };
   }
 
   // First pull on sign-in — replaces state, resets history, navigates home.
@@ -5468,7 +5605,8 @@
     if (!supa || !authUser) return;
     try {
       adoptingCloud = true;
-      const { settings, lists, orderInCloud } = await fetchCloudState();
+      const { settings, lists, orderInCloud, listMeta: meta } = await fetchCloudState();
+      listMeta = meta || new Map();
 
       if (lists.length === 0) {
         // Brand-new account: seed default starter lists, then push them up.
@@ -5510,6 +5648,10 @@
       adoptingCloud = false;
       if (needsOrderPush) pushCloud();
       offerGuestMerge();
+      // Sharing prompts: pending invites for me, and pending forks from
+      // shared lists whose owner triggered a delete-everywhere.
+      checkPendingInvites();
+      checkPendingForks();
       return;
     } catch (e) {
       console.warn('JotList pullCloud:', e);
@@ -5525,9 +5667,16 @@
     if (!supa || !authUser || adoptingCloud) return;
     try {
       adoptingCloud = true;
-      const { settings, lists } = await fetchCloudState();
+      const { settings, lists, listMeta: meta } = await fetchCloudState();
+      listMeta = meta || new Map();
       const next = normalizeState(Object.assign({}, settings, { lists: lists }));
-      if (sortedJson(next) === sortedJson(state)) return;
+      if (sortedJson(next) === sortedJson(state)) {
+        // Even if list content is unchanged, an invite or a fork prompt
+        // for this user may have arrived — surface those popups.
+        checkPendingInvites();
+        checkPendingForks();
+        return;
+      }
       state = next;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       snapshotCloudState();
@@ -5536,6 +5685,8 @@
       if (activeListId && !getList(activeListId)) { activeListId = null; goHome(); return; }
       if (activeListId && activeList()) themeList(listHex(activeList()));
       render();
+      checkPendingInvites();
+      checkPendingForks();
     } catch (e) {
       console.warn('JotList refreshFromCloud:', e);
     } finally {
@@ -5610,15 +5761,32 @@
       }
 
       // 2) Deletions — IDs we knew about that are gone from state.lists now.
-      // RLS lets the owner delete the list (cascades members + views). For
-      // Phase 2 every list a user has IS owned by them — Phase 3 will handle
-      // the leave-a-shared-list case (delete only the membership row).
+      // Owner-deletes go to `lists` (cascades members + views); member-only
+      // deletes (a "leave the shared list" action) go to `list_members`.
+      // The orphan-cleanup trigger handles the last-member-leaves case.
       const currentIds = new Set(state.lists.map(l => l.id));
       const toDelete = [];
       lastListSnap.forEach((_, id) => { if (!currentIds.has(id)) toDelete.push(id); });
       if (toDelete.length) {
-        await supa.from('lists').delete().in('id', toDelete);
-        toDelete.forEach(id => { lastListSnap.delete(id); lastViewSnap.delete(id); });
+        const ownedToDelete = [];
+        const membershipsToDelete = [];
+        for (const id of toDelete) {
+          const m = listMeta.get(id);
+          if (!m || m.owner_id === authUser.id) ownedToDelete.push(id);
+          else membershipsToDelete.push(id);
+        }
+        if (ownedToDelete.length) {
+          await supa.from('lists').delete().in('id', ownedToDelete);
+        }
+        if (membershipsToDelete.length) {
+          await supa.from('list_members').delete()
+            .eq('user_id', authUser.id).in('list_id', membershipsToDelete);
+        }
+        toDelete.forEach(id => {
+          lastListSnap.delete(id);
+          lastViewSnap.delete(id);
+          listMeta.delete(id);
+        });
       }
 
       // 3) Inserts + content updates.
@@ -5692,8 +5860,11 @@
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'lists' },
         debouncedRefresh)
+      // No user_id filter on list_members — Phase 3 needs to know when other
+      // people join my lists too, and RLS already scopes events to rows I
+      // can see.
       .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'list_members', filter: 'user_id=eq.' + authUser.id },
+        { event: '*', schema: 'public', table: 'list_members' },
         debouncedRefresh)
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'user_list_view', filter: 'user_id=eq.' + authUser.id },
@@ -5701,7 +5872,317 @@
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'user_data', filter: 'user_id=eq.' + authUser.id },
         debouncedRefresh)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'list_invites' },
+        debouncedRefresh)
       .subscribe();
+  }
+
+  // --- Phase 3: sharing ----------------------------------------------------
+
+  // Tracks invites + fork prompts we've already surfaced this session so a
+  // realtime refresh doesn't re-open the same popup over and over.
+  let promptedInvites = new Set();
+  let promptedForks = new Set();
+  function confirmIsOpen() {
+    return document.getElementById('confirmOverlay').classList.contains('open');
+  }
+
+  function userEmail() {
+    return authUser && authUser.email ? authUser.email.toLowerCase() : '';
+  }
+  function isOwnerOf(list) {
+    const m = listMeta.get(list.id);
+    return m && m.owner_id === authUser.id;
+  }
+  function memberCount(list) {
+    const m = listMeta.get(list.id);
+    return m ? m.members.length : 1;
+  }
+
+  // ---- Share modal ----
+  let shareListId = null;
+
+  async function openShareModal() {
+    if (!editingListId) return;
+    if (!supa || !authUser) {
+      showConfirm({ title: 'Sign in to share', message: 'Sharing a list needs a JotList account so we know who you are.', confirmText: 'OK', onConfirm: () => {} });
+      return;
+    }
+    if (!isOwnerOf({ id: editingListId })) {
+      showConfirm({ title: 'Only the owner can invite', message: 'Ask the person who created this list to invite more people.', confirmText: 'OK', onConfirm: () => {} });
+      return;
+    }
+    shareListId = editingListId;
+    closeListModal();
+    document.getElementById('shareEmailField').value = '';
+    document.getElementById('shareModalOverlay').classList.add('open');
+    setTimeout(() => document.getElementById('shareEmailField').focus(), 50);
+    await renderShareDetails();
+  }
+
+  function closeShareModal() {
+    document.getElementById('shareModalOverlay').classList.remove('open');
+    shareListId = null;
+  }
+
+  async function renderShareDetails() {
+    const lid = shareListId;
+    if (!lid) return;
+    const membersBox = document.getElementById('shareMembers');
+    const invitesBox = document.getElementById('shareInvites');
+    membersBox.innerHTML = '';
+    invitesBox.innerHTML = '';
+
+    // Members: pull emails for each user_id via the auth.users public-readable
+    // columns. Supabase exposes those through `auth.users` only to service
+    // role, so we can't read other users' emails directly — show "Member" by
+    // default and "You" for the current user.
+    const meta = listMeta.get(lid);
+    const members = meta ? meta.members : [];
+    members.forEach(m => {
+      const row = document.createElement('div');
+      row.className = 'share-row';
+      const isYou = m.user_id === authUser.id;
+      row.innerHTML =
+        '<span class="share-email">' + (isYou ? userEmail() : 'Member') + '</span>' +
+        '<span class="share-tag ' + (isYou ? 'you' : '') + '">' + (m.role === 'owner' ? 'Owner' : 'Member') + '</span>';
+      membersBox.appendChild(row);
+    });
+
+    // Pending invites
+    const { data } = await supa.from('list_invites')
+      .select('id, invited_email, created_at')
+      .eq('list_id', lid)
+      .is('accepted_at', null)
+      .is('declined_at', null)
+      .order('created_at', { ascending: true });
+    (data || []).forEach(inv => {
+      const row = document.createElement('div');
+      row.className = 'share-row';
+      row.innerHTML =
+        '<span class="share-email">' + esc(inv.invited_email) + '</span>' +
+        '<span class="share-tag pending">Pending</span>' +
+        '<button class="share-remove" title="Cancel invite" aria-label="Cancel invite">×</button>';
+      row.querySelector('.share-remove').addEventListener('click', () => cancelInvite(inv.id));
+      invitesBox.appendChild(row);
+    });
+  }
+
+  async function sendInvite() {
+    if (!shareListId) return;
+    const emailRaw = document.getElementById('shareEmailField').value.trim();
+    if (!emailRaw) return;
+    const email = emailRaw.toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      showConfirm({ title: 'Check the email', message: 'That doesn\'t look like a valid email address.', confirmText: 'OK', onConfirm: () => {} });
+      return;
+    }
+    if (email === userEmail()) {
+      showConfirm({ title: 'That\'s you', message: 'You\'re already on this list — you can\'t invite yourself.', confirmText: 'OK', onConfirm: () => {} });
+      return;
+    }
+    const btn = document.getElementById('shareSendBtn');
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    try {
+      const { error } = await supa.from('list_invites').insert({
+        list_id: shareListId,
+        invited_email: email,
+        invited_by: authUser.id,
+      });
+      if (error) throw error;
+      // Best-effort email notification via the existing Apps Script relay.
+      // The relay accepts `kind: 'invite'` (Phase 3f); if the deployed copy
+      // doesn't recognise it the request just no-ops, the invite still works.
+      try {
+        const list = getList(shareListId);
+        const fr = await fetch(FEEDBACK_RELAY, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({
+            kind: 'invite',
+            to_email: email,
+            from_email: userEmail(),
+            list_name: list ? list.name : 'a list',
+            accept_url: location.origin + location.pathname,
+          }),
+        });
+      } catch (e) {}
+      document.getElementById('shareEmailField').value = '';
+      await renderShareDetails();
+    } catch (e) {
+      console.warn('sendInvite:', e);
+      showConfirm({ title: 'Couldn\'t send', message: 'Something went wrong — please try again.', confirmText: 'OK', onConfirm: () => {} });
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Send invite';
+    }
+  }
+
+  async function cancelInvite(inviteId) {
+    if (!inviteId) return;
+    try {
+      await supa.from('list_invites')
+        .update({ declined_at: new Date().toISOString() })
+        .eq('id', inviteId);
+      await renderShareDetails();
+    } catch (e) { console.warn('cancelInvite:', e); }
+  }
+
+  // ---- Pending-invite popup (on sign-in) ----
+  async function checkPendingInvites() {
+    if (!supa || !authUser || confirmIsOpen()) return;
+    const email = userEmail();
+    if (!email) return;
+    const { data } = await supa.from('list_invites')
+      .select('id, list_id, invited_email, invited_by, created_at, lists(title)')
+      .ilike('invited_email', email)
+      .is('accepted_at', null)
+      .is('declined_at', null)
+      .order('created_at', { ascending: true });
+    const fresh = (data || []).filter(inv => !promptedInvites.has(inv.id));
+    if (!fresh.length) return;
+    const inv = fresh[0];
+    promptedInvites.add(inv.id);
+    const listName = (inv.lists && inv.lists.title) || 'a list';
+    showConfirm({
+      title: 'List invite',
+      message: 'You were invited to "' + listName + '". Add it to your account?',
+      confirmText: 'Accept',
+      extra: { label: 'Decline', onClick: () => acceptOrDeclineInvite(inv, false) },
+      onConfirm: () => acceptOrDeclineInvite(inv, true),
+    });
+  }
+
+  async function acceptOrDeclineInvite(inv, accept) {
+    try {
+      if (accept) {
+        const { error } = await supa.from('list_members').insert({
+          list_id: inv.list_id,
+          user_id: authUser.id,
+          role: 'member',
+        });
+        if (error) throw error;
+        await supa.from('list_invites')
+          .update({ accepted_at: new Date().toISOString() })
+          .eq('id', inv.id);
+        refreshFromCloud();
+      } else {
+        await supa.from('list_invites')
+          .update({ declined_at: new Date().toISOString() })
+          .eq('id', inv.id);
+      }
+    } catch (e) {
+      console.warn('acceptOrDeclineInvite:', e);
+    }
+  }
+
+  // ---- Leave a shared list ----
+  function leaveFromModal() {
+    const id = editingListId;
+    closeListModal();
+    if (!id) return;
+    const list = getList(id);
+    if (!list) return;
+    showConfirm({
+      title: 'Leave list',
+      message: 'Stop seeing "' + list.name + '"? The list keeps existing for the other people on it.',
+      confirmText: 'Leave',
+      danger: true,
+      onConfirm: () => leaveSharedList(list),
+    });
+  }
+
+  async function leaveSharedList(list) {
+    if (!supa || !authUser) return;
+    try {
+      await supa.from('list_members').delete()
+        .eq('list_id', list.id).eq('user_id', authUser.id);
+      state.lists = state.lists.filter(l => l.id !== list.id);
+      lastListSnap.delete(list.id);
+      lastViewSnap.delete(list.id);
+      listMeta.delete(list.id);
+      saveState();
+      if (activeListId === list.id) goHome(); else renderHome();
+    } catch (e) { console.warn('leaveSharedList:', e); }
+  }
+
+  // ---- Owner deletes a shared list ("delete everywhere") ----
+  async function softDeleteSharedList(list) {
+    if (!supa || !authUser) return;
+    try {
+      await supa.from('lists')
+        .update({ pending_fork_at: new Date().toISOString() })
+        .eq('id', list.id);
+      // Flag every remaining member as needing the fork prompt
+      await supa.from('list_members')
+        .update({ fork_seen: false })
+        .eq('list_id', list.id)
+        .neq('user_id', authUser.id);
+      // Remove myself — the orphan trigger will clean up if I was the last one
+      await supa.from('list_members').delete()
+        .eq('list_id', list.id).eq('user_id', authUser.id);
+      state.lists = state.lists.filter(l => l.id !== list.id);
+      lastListSnap.delete(list.id);
+      lastViewSnap.delete(list.id);
+      listMeta.delete(list.id);
+      saveState();
+      if (activeListId === list.id) goHome(); else renderHome();
+    } catch (e) { console.warn('softDeleteSharedList:', e); }
+  }
+
+  // ---- Fork prompt (someone deleted a shared list I was on) ----
+  async function checkPendingForks() {
+    if (!supa || !authUser || confirmIsOpen()) return;
+    const { data } = await supa.from('list_members')
+      .select('list_id, lists(id, title, color, todos, completed, payload, pending_fork_at)')
+      .eq('user_id', authUser.id)
+      .eq('fork_seen', false);
+    const fresh = (data || []).filter(m =>
+      m.lists && m.lists.pending_fork_at && !promptedForks.has(m.list_id)
+    );
+    if (!fresh.length) return;
+    const m = fresh[0];
+    promptedForks.add(m.list_id);
+    showConfirm({
+      title: 'Shared list was deleted',
+      message: '"' + (m.lists.title || 'A list') + '" was deleted by its owner. Keep your own copy or discard it?',
+      confirmText: 'Keep my copy',
+      extra: { label: 'Discard', onClick: () => discardForkedList(m) },
+      onConfirm: () => keepForkedList(m),
+    });
+  }
+
+  async function keepForkedList(m) {
+    if (!supa || !authUser || !m || !m.lists) return;
+    try {
+      const src = m.lists;
+      const newId = 'list_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+      const payload = (src.payload && typeof src.payload === 'object') ? src.payload : {};
+      const fresh = Object.assign({}, payload, {
+        id: newId,
+        name: src.title,
+        color: parseInt(src.color, 10) || 0,
+        todos: Array.isArray(src.todos) ? src.todos : [],
+        completed: Array.isArray(src.completed) ? src.completed : [],
+        size: 1,
+      });
+      state.lists.push(fresh);
+      saveState();
+      await supa.from('list_members').delete()
+        .eq('list_id', m.list_id).eq('user_id', authUser.id);
+      renderHome();
+    } catch (e) { console.warn('keepForkedList:', e); }
+  }
+
+  async function discardForkedList(m) {
+    if (!supa || !authUser || !m) return;
+    try {
+      await supa.from('list_members').delete()
+        .eq('list_id', m.list_id).eq('user_id', authUser.id);
+    } catch (e) { console.warn('discardForkedList:', e); }
   }
 
   async function signIn() {
