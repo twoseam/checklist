@@ -347,24 +347,25 @@
   .card-resize::after {
     content: '';
     position: absolute;
-    width: 10px;
-    height: 10px;
+    width: 12px;
+    height: 12px;
     background: color-mix(in srgb, var(--text-secondary) 60%, transparent);
   }
+  /* Triangles sit flush to the card's corner — no padding. */
   .card-resize.br::after {
-    right: 4px; bottom: 4px;
+    right: 0; bottom: 0;
     clip-path: polygon(100% 0, 100% 100%, 0 100%);
   }
   .card-resize.bl::after {
-    left: 4px; bottom: 4px;
+    left: 0; bottom: 0;
     clip-path: polygon(0 0, 0 100%, 100% 100%);
   }
   .card-resize.tr::after {
-    right: 4px; top: 4px;
+    right: 0; top: 0;
     clip-path: polygon(100% 0, 100% 100%, 0 0);
   }
   .card-resize.tl::after {
-    left: 4px; top: 4px;
+    left: 0; top: 0;
     clip-path: polygon(0 0, 100% 0, 0 100%);
   }
 
@@ -380,14 +381,15 @@
     .card-resize { width: 40px; height: 40px; }
     .card-resize.br::after, .card-resize.bl::after,
     .card-resize.tr::after, .card-resize.tl::after {
-      width: 8px;
-      height: 8px;
+      width: 10px;
+      height: 10px;
       opacity: 0.4;
     }
-    .card-resize.br::after { right: 6px; bottom: 6px; }
-    .card-resize.bl::after { left:  6px; bottom: 6px; }
-    .card-resize.tr::after { right: 6px; top:    6px; }
-    .card-resize.tl::after { left:  6px; top:    6px; }
+    /* Stay flush to the corner on touch too. */
+    .card-resize.br::after { right: 0; bottom: 0; }
+    .card-resize.bl::after { left:  0; bottom: 0; }
+    .card-resize.tr::after { right: 0; top:    0; }
+    .card-resize.tl::after { left:  0; top:    0; }
   }
 
   /* Ghost slots shown while a card is being resized or reordered —
@@ -1764,7 +1766,13 @@
 
   .overlay {
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    /* dvh tracks the *visible* viewport (excludes the keyboard on mobile),
+       so a centered modal always lands in the visible area. */
+    height: 100vh;
+    height: 100dvh;
     background: rgba(42,33,24,0.55);
     display: flex;
     align-items: center;
@@ -1792,14 +1800,6 @@
     transition: transform 0.24s cubic-bezier(0.32, 0.72, 0, 1);
   }
 
-  /* On mobile, anchor modals near the top so the keyboard rising from the
-     bottom can't cover their buttons. */
-  @media (max-width: 720px) {
-    .overlay {
-      align-items: flex-start;
-      padding-top: 32px;
-    }
-  }
 
   .overlay.open .modal { transform: translateY(0) scale(1); }
 
@@ -2051,6 +2051,37 @@
 
   .modal-btn-danger { background: var(--red); }
   .modal-btn-danger:hover { filter: brightness(0.92); }
+
+  /* Minimal confirm modal — no header, no message. Single big gradient
+     primary button with a tiny text-link cancel underneath. */
+  .modal.minimal { padding: 22px 22px 18px; max-width: 320px; }
+  .modal.minimal .modal-header,
+  .modal.minimal .confirm-message { display: none; }
+  .modal.minimal .modal-actions {
+    /* column-reverse so primary (last in DOM) sits on top, cancel below. */
+    flex-direction: column-reverse;
+    gap: 10px;
+    align-items: stretch;
+    justify-content: stretch;
+  }
+  .modal.minimal .modal-btn-primary {
+    background: linear-gradient(135deg, #c0392b 0%, #d9493a 100%);
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 800;
+    padding: 16px 18px;
+    border-radius: 12px;
+    box-shadow: 0 4px 14px rgba(192, 57, 43, 0.30);
+  }
+  .modal.minimal .modal-btn-primary:hover { filter: brightness(0.95); }
+  .modal.minimal .modal-btn-secondary {
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 6px;
+  }
+  .modal.minimal .modal-btn-secondary:hover { background: transparent; color: var(--text-secondary); }
 
   .confirm-message {
     font-size: 0.85rem;
@@ -2368,6 +2399,11 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.18.2', date: '2026-05-23', changes: [
+      'Copy-task popup is now a single big Copy button with a subtle Cancel',
+      'Modals stay vertically centred above the mobile keyboard',
+      'Corner triangle grips sit flush to the card edge',
+    ]},
     { version: '1.18.1', date: '2026-05-23', changes: [
       'Resize a card by dragging — it grows under your finger now',
       'Cleaner triangle grips on the corners',
@@ -3899,8 +3935,7 @@
         endDrag(false);
         if (!task) return;
         showConfirm({
-          title: 'Copy task',
-          message: '',
+          minimal: true,
           confirmText: 'Copy',
           onConfirm: () => {
             try { navigator.clipboard && navigator.clipboard.writeText(task.text); }
@@ -4506,6 +4541,8 @@
     const ok = document.getElementById('confirmOk');
     ok.textContent = opts.confirmText || 'Confirm';
     ok.classList.toggle('modal-btn-danger', !!opts.danger);
+    const modal = document.querySelector('#confirmOverlay .modal');
+    modal.classList.toggle('minimal', !!opts.minimal);
     confirmAction = opts.onConfirm || null;
     document.getElementById('confirmOverlay').classList.add('open');
   }
