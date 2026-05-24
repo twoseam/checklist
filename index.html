@@ -5982,6 +5982,17 @@
       showConfirm({ title: 'Sign in to share', message: 'Sharing a list needs a JotList account so we know who you are.', confirmText: 'OK', onConfirm: () => {} });
       return;
     }
+    // If the list was just created locally, the cloud might not have a row
+    // for it yet — flush any pending push immediately, then re-read the
+    // membership map. Without this, sharing right after creation fails.
+    if (!listMeta.has(lid) && state.lists.find(l => l.id === lid)) {
+      if (cloudTimer) { clearTimeout(cloudTimer); cloudTimer = null; }
+      try {
+        await pushCloud();
+        const { listMeta: meta } = await fetchCloudState();
+        if (meta) listMeta = meta;
+      } catch (e) { console.warn('openShareModal pre-sync:', e); }
+    }
     if (!isOwnerOf({ id: lid })) {
       showConfirm({ title: 'Only the owner can invite', message: 'Ask the person who created this list to invite more people.', confirmText: 'OK', onConfirm: () => {} });
       return;
