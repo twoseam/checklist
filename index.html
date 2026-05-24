@@ -1683,11 +1683,11 @@
     padding: 24px;
     z-index: 100;
     opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.2s ease, visibility 0.2s;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
   }
 
-  .overlay.open { opacity: 1; visibility: visible; }
+  .overlay.open { opacity: 1; pointer-events: auto; }
 
   .modal {
     background: var(--surface);
@@ -2246,6 +2246,10 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.17.2', date: '2026-05-23', changes: [
+      'Hold-still on a task → offer to copy it to the clipboard',
+      'New-list modal now pops the keyboard right away',
+    ]},
     { version: '1.17.1', date: '2026-05-23', changes: [
       'Fixed: signing in fresh no longer pulls another account’s lists',
       'Fixed: starter lists no longer trigger the "Add browser lists?" prompt',
@@ -3698,7 +3702,26 @@
       document.body.appendChild(clone);
       div.classList.add('task-dragging');
       taskDrag = { source: div, clone, grabX: x - rect.left, grabY: y - rect.top,
-                   lastOver: null, cooldownUntil: 0 };
+                   lastOver: null, cooldownUntil: 0,
+                   startX: x, startY: y, stillTimer: null };
+      // Hold still after the lift — offer to copy this task to the clipboard.
+      // Cancelled the moment the user actually moves to reorder.
+      taskDrag.stillTimer = setTimeout(() => {
+        if (!taskDrag) return;
+        const list = activeList();
+        const task = list && list.todos.find(t => t.id === id);
+        endDrag(false);
+        if (!task) return;
+        showConfirm({
+          title: 'Copy task',
+          message: 'Copy "' + task.text + '" to your clipboard?',
+          confirmText: 'Copy',
+          onConfirm: () => {
+            try { navigator.clipboard && navigator.clipboard.writeText(task.text); }
+            catch (e) {}
+          },
+        });
+      }, 600);
       requestAnimationFrame(() => {
         if (!taskDrag) return;
         clone.style.transition = 'transform 0.16s ease-out';
@@ -3709,6 +3732,12 @@
 
     function moveDrag(x, y) {
       if (!taskDrag) return;
+      // Any clear move cancels the hold-still copy offer.
+      if (taskDrag.stillTimer
+          && Math.hypot(x - taskDrag.startX, y - taskDrag.startY) > 15) {
+        clearTimeout(taskDrag.stillTimer);
+        taskDrag.stillTimer = null;
+      }
       taskDrag.clone.style.transform =
         'translate(' + (x - taskDrag.grabX) + 'px,' + (y - taskDrag.grabY)
         + 'px) scale(1.05)';
