@@ -247,6 +247,17 @@
     margin-left: 3px;
     line-height: 1;
   }
+  /* Pill version shown when the open list is actually shared */
+  .list-view-share.list-view-shared-pill {
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    line-height: 1;
+  }
+  .list-view-share.list-view-shared-pill:hover { filter: brightness(0.96); }
 
   .header-right {
     display: flex;
@@ -4781,12 +4792,18 @@
     const btn = document.getElementById('listViewShare');
     const showBtn = !!(authUser && (iAmOwner || isShared));
     btn.style.display = showBtn ? '' : 'none';
+    btn.classList.remove('list-view-shared-pill');
+    btn.style.background = '';
+    btn.style.color = '';
     if (showBtn) {
       if (isShared) {
+        // Pill in a tinted version of the list color
+        const hex = listHex(list);
+        btn.classList.add('list-view-shared-pill');
+        btn.style.background = 'color-mix(in srgb, ' + hex + ' 18%, transparent)';
+        btn.style.color = hex;
         btn.title = 'Shared with ' + sharedCount + ' ' + (sharedCount === 2 ? 'person' : 'people');
-        btn.innerHTML =
-          '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5"/><circle cx="17" cy="7" r="2.6"/><path d="M15 13c3 0 6 1.6 6 4.5"/></svg>'
-          + '<span class="list-view-share-count">' + sharedCount + '</span>';
+        btn.textContent = 'Shared';
       } else {
         btn.title = 'Share list';
         btn.innerHTML =
