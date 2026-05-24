@@ -2128,8 +2128,7 @@
   /* Tiny "Shared" label that sits right under the open/done counts */
   .list-card-shared-line {
     font-size: 0.68rem;
-    color: var(--text-dim);
-    font-style: italic;
+    font-weight: 700;
     margin-top: 2px;
   }
 
@@ -3456,7 +3455,7 @@
       const meta = listMeta.get(list.id);
       const sharedCount = meta ? meta.members.length : 1;
       const sharedLine = sharedCount > 1
-        ? `<div class="list-card-shared-line" title="Shared with ${sharedCount} ${sharedCount === 2 ? 'person' : 'people'}">Shared</div>` : '';
+        ? `<div class="list-card-shared-line" style="color:${listHex(list)}" title="Shared with ${sharedCount} ${sharedCount === 2 ? 'person' : 'people'}">Shared</div>` : '';
       card.innerHTML = `
         <div class="card-inner">
           <div class="list-card-stripe" style="background:${listHex(list)}"></div>
