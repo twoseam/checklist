@@ -2462,6 +2462,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.20.3', date: '2026-05-24', changes: [
+      'Fixed: drag-to-reorder cards actually saves the new order now',
+    ]},
     { version: '1.20.2', date: '2026-05-24', changes: [
       'Fixed: home grid no longer reshuffles after a sync — your card order sticks',
     ]},
@@ -3714,7 +3717,7 @@
       sib = homeDrag.source.previousElementSibling;
     }
     if (!sib || !sib.classList.contains('list-card')) return;
-    homeDrag.combineId = Number(sib.getAttribute('data-list-id'));
+    homeDrag.combineId = sib.getAttribute('data-list-id');
     homeDrag.hoverCard = sib;
     sib.classList.add('combine-over');
   }
@@ -3764,7 +3767,7 @@
     if (commit !== false && combineId == null) {
       // Commit the reorder — state.lists follows the cards' DOM order.
       const order = [...grid.querySelectorAll('.list-card')]
-        .map(c => Number(c.getAttribute('data-list-id')));
+        .map(c => c.getAttribute('data-list-id'));
       state.lists.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
       saveState();
     }
