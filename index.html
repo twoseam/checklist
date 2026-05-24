@@ -2246,6 +2246,11 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.17.1', date: '2026-05-23', changes: [
+      'Fixed: signing in fresh no longer pulls another account’s lists',
+      'Fixed: starter lists no longer trigger the "Add browser lists?" prompt',
+      'Home-screen splash and theme colours updated to the new brand',
+    ]},
     { version: '1.17.0', date: '2026-05-23', changes: [
       'Cards pack into rows again — drag one to reorder, no gaps',
       '2×2 cards flow into any free space they fit',
@@ -4698,8 +4703,26 @@
         goHome();
         offerGuestMerge();
       } else {
-        // First sign-in: no cloud row yet — carry the local lists up.
+        // First sign-in for this account — no cloud row yet. Start from
+        // empty starter lists, not whatever stale state is cached in this
+        // browser (which may belong to a previously-signed-in user — that's
+        // how account A's lists can leak into account B's first sign-in).
+        // offerGuestMerge runs after, so the user can still pull their
+        // browser-only lists in if any are genuinely theirs.
+        adoptingCloud = true;
+        state = normalizeState({ lists: [
+          newList('List 1', 0, DEFAULT_TODOS),
+          newList('List 2', 1, DEFAULT_TODOS),
+        ]});
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        adoptingCloud = false;
+        resetHistory();
+        applyPalette();
+        applyDark();
+        activeListId = null;
+        goHome();
         pushCloud();
+        offerGuestMerge();
       }
     } catch (e) { console.warn('JotList pullCloud:', e); }
   }
@@ -4715,15 +4738,22 @@
       if (b && Array.isArray(b.lists)) browserLists = b.lists;
     } catch (e) {}
     const accountIds = new Set(state.lists.map(l => l.id));
-    // Any list this browser has that the account lacks — empty or not, since
-    // a list the user named is theirs. The one exception: an empty default
-    // starter list ("JotList 1/2"), which is always there and not worth merging.
+    // Skip any list the account already has, plus starter lists the user
+    // never touched (default name, no completed items, and todos still equal
+    // DEFAULT_TODOS verbatim). Those are first-visit placeholders, not the
+    // user's content — offering to merge them is just noise.
     const defaults = ['List 1', 'List 2', 'JotList', 'JotList 1', 'JotList 2'];
+    const isStarter = l => {
+      if (defaults.indexOf(l.name) < 0) return false;
+      if (l.completed && l.completed.length) return false;
+      const todos = l.todos || [];
+      if (todos.length === 0) return true;
+      if (todos.length !== DEFAULT_TODOS.length) return false;
+      return todos.every((t, i) => t.text === DEFAULT_TODOS[i]);
+    };
     const extras = browserLists.filter(l => {
       if (!l || accountIds.has(l.id)) return false;
-      const empty = (!l.todos || !l.todos.length)
-        && (!l.completed || !l.completed.length);
-      return !(empty && defaults.indexOf(l.name) >= 0);
+      return !isStarter(l);
     });
     if (!extras.length) return;
     const n = extras.length;
