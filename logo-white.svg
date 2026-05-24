@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="50 0 510 200" fill="none">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@700&amp;display=swap');
+      .wm {
+        font-family: 'Poppins', system-ui, -apple-system, sans-serif;
+        font-weight: 700;
+        font-size: 168px;
+      }
+    </style>
+  </defs>
+  <text class="wm" x="120" y="143" text-anchor="end" fill="#ffffff">J</text>
+  <circle cx="163" cy="98" r="46" fill="#ffffff"/>
+  <path d="M142 100 L157 114 L186 79" fill="none" stroke="#c0392b"
+        stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+  <text class="wm" x="210" y="143" fill="#ffffff" letter-spacing="-7">tList</text>
+</svg>
