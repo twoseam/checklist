@@ -2410,6 +2410,14 @@
 
 <script>
   const STORAGE_KEY = 'checklist_data';
+  // Dark mode preference is device-local on purpose — phone and laptop
+  // can each pick their own theme without one yanking the other around.
+  const DARK_KEY = 'jotlist_dark';
+  function isDark() { return localStorage.getItem(DARK_KEY) === '1'; }
+  function setDarkPref(on) {
+    if (on) localStorage.setItem(DARK_KEY, '1');
+    else localStorage.removeItem(DARK_KEY);
+  }
   // The browser's own lists. Written ONLY while signed out, so it can never
   // pick up an account's data; restored at sign-out.
   const LOCAL_KEY = 'checklist_browser';
@@ -2433,7 +2441,10 @@
       st.paletteOn = [true, true, true, true, true, true];
     }
     st.paletteOn[0] = true;  // slot 1 can never be turned off
-    if (typeof st.dark !== 'boolean') st.dark = false;
+    // Dark used to ride on cloud state. Carry it into the device-local
+    // store once, then drop it so it stops syncing across devices.
+    if (st.dark === true && !localStorage.getItem(DARK_KEY)) setDarkPref(true);
+    delete st.dark;
     if (typeof st.newTaskTop !== 'boolean') st.newTaskTop = true;
     st.lists.forEach(l => {
       if (typeof l.color !== 'number') {
@@ -2451,6 +2462,9 @@
 
   // Newest version first. Keep bullets VERY short.
   const CHANGELOG = [
+    { version: '1.19.0', date: '2026-05-23', changes: [
+      'Dark mode is per-device now — your phone and laptop can disagree',
+    ]},
     { version: '1.18.9', date: '2026-05-23', changes: [
       'Link detection catches bare domains too — jotlist.io, anthropic.ai, linktr.ee, etc.',
     ]},
@@ -2973,15 +2987,15 @@
   const DARK_BG = 'linear-gradient(150deg, #0e0e12, #18181f, #121216, #0e0e12)';
 
   function applyDark() {
-    document.documentElement.classList.toggle('dark', !!state.dark);
+    const on = isDark();
+    document.documentElement.classList.toggle('dark', on);
     const dt = document.getElementById('darkToggle');
-    if (dt) dt.classList.toggle('on', !!state.dark);
+    if (dt) dt.classList.toggle('on', on);
   }
 
   function toggleDark() {
-    state.dark = !state.dark;
+    setDarkPref(!isDark());
     applyDark();
-    saveState();
     if (activeListId && activeList()) themeList(listHex(activeList()));
     else themeHome();
   }
@@ -3000,7 +3014,7 @@
 
   function themeList(color) {
     const lv = document.getElementById('listView');
-    if (state.dark) {
+    if (isDark()) {
       // Charcoal background; the list's colour kept only as the accent.
       document.documentElement.style.setProperty('--app-bg', DARK_BG);
       lv.style.setProperty('--list-bg', DARK_BG);
@@ -3029,9 +3043,10 @@
   // Theme the home view to the blend of all list colors.
   function themeHome() {
     const first = state.lists[0];
+    const dark = isDark();
     document.documentElement.style.setProperty('--app-bg',
-      state.dark ? DARK_BG : homeGradient());
-    const homeInk = state.dark ? '#efe9e2'
+      dark ? DARK_BG : homeGradient());
+    const homeInk = dark ? '#efe9e2'
       : (first && isLight(listHex(first)) ? '#2a2118' : '#fff');
     document.getElementById('homeView').style.setProperty('--on-bg', homeInk);
     document.documentElement.style.setProperty('--on-bg', homeInk);
