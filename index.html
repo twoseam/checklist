@@ -466,20 +466,6 @@
     background-repeat: repeat;
   }
 
-  /* Resize preview — a hollow outline that follows the finger to show the
-     prospective footprint. The real card and its neighbours never move and the
-     text never scales; the size only commits on release. */
-  .resize-ghost {
-    position: fixed;
-    z-index: 6;
-    box-sizing: border-box;
-    border: 2.5px solid var(--on-bg, #fff);
-    border-radius: var(--radius, 6px);
-    background: color-mix(in srgb, var(--on-bg, #fff) 14%, transparent);
-    pointer-events: none;
-    will-change: transform;
-  }
-
   /* The card a dragged list will merge into. */
   .list-card.combine-over,
   .list-grid.reordering .list-card.combine-over:hover {
@@ -3788,7 +3774,6 @@
   }
 
   let resizeState = null;
-  let resizeGhost = null;   // hollow outline shown while dragging a corner
 
   function attachCardResize(handle, list) {
     if (!handle) return;
@@ -3807,6 +3792,7 @@
         x0: e.clientX, y0: e.clientY, cell,
         dirX, dirY,
         tDown: Date.now(), moved: false,
+        startedBig: listSize(list) === 2,
       };
       grid.classList.add('resizing');
       grid.style.backgroundSize = (cell + gap) + 'px ' + (cell + gap) + 'px';
@@ -3816,15 +3802,9 @@
     });
   }
 
-  // Outward direction → "grow from this corner away from the grip" origin.
-  // E.g. a BR grip means the card grows from its TL corner (origin: left top).
-  function originForGrip(dirX, dirY) {
-    return (dirX > 0 ? 'left' : 'right') + ' ' + (dirY > 0 ? 'top' : 'bottom');
-  }
-
   function onResizeMove(e) {
     if (!resizeState) return;
-    const { card, cell, dirX, dirY, list } = resizeState;
+    const { card, cell, dirX, dirY, startedBig } = resizeState;
     if (Math.abs(e.clientX - resizeState.x0) > 6
         || Math.abs(e.clientY - resizeState.y0) > 6) {
       resizeState.moved = true;
@@ -3833,69 +3813,42 @@
     const dx = (e.clientX - resizeState.x0) * dirX;
     const dy = (e.clientY - resizeState.y0) * dirY;
     const reach = Math.max(dx, dy);
-    const isBig = listSize(list) === 2;
-    // Live "follow my finger" scaling. The class doesn't toggle mid-drag —
-    // we commit once on release. This avoids the mid-drag layout flip that
-    // used to race with the release path and snap the card back to 1x1.
-    let scale;
-    if (!isBig) {
-      // 1x1 growing — scale up to 2x at most.
-      scale = 1 + Math.max(0, Math.min(reach / cell, 1.0));
+    // Live preview by toggling the REAL 2x2 size as the finger crosses a
+    // threshold. The grid reflows so neighbours glide out of the way and the
+    // card grows to its true footprint — without scaling (so text stays put).
+    let previewBig;
+    if (!startedBig) {
+      previewBig = reach > cell * 0.5;        // grow once pulled out half a cell
     } else {
-      // 2x2 shrinking — scale down to 0.5x at most.
-      scale = 1 + Math.min(0, Math.max(reach / (cell * 2), -0.5));
+      previewBig = reach > -cell * 0.6;       // shrink once pulled in past 0.6 cell
     }
-    resizeState.lastScale = scale;
-    // Preview on a hollow ghost overlay, NOT on the card itself — so the card's
-    // text never scales and no neighbour ever shifts before release. The ghost
-    // sits over the card's current footprint and grows/shrinks with the finger.
-    if (!resizeGhost) {
-      const r = card.getBoundingClientRect();
-      resizeGhost = document.createElement('div');
-      resizeGhost.className = 'resize-ghost';
-      resizeGhost.style.left = r.left + 'px';
-      resizeGhost.style.top = r.top + 'px';
-      resizeGhost.style.width = r.width + 'px';
-      resizeGhost.style.height = r.height + 'px';
-      document.body.appendChild(resizeGhost);
+    if (previewBig !== resizeState.previewBig) {
+      resizeState.previewBig = previewBig;
+      card.classList.toggle('big', previewBig);
     }
-    resizeGhost.style.transformOrigin = originForGrip(dirX, dirY);
-    resizeGhost.style.transform = 'scale(' + scale + ')';
   }
 
   function onResizeEnd() {
     if (!resizeState) return;
-    const { list, card, tDown, moved, lastScale } = resizeState;
+    const { list, card, tDown, moved, startedBig, previewBig } = resizeState;
     const grid = document.getElementById('listGrid');
     grid.classList.remove('resizing');
     grid.style.backgroundSize = '';
-    if (resizeGhost) { resizeGhost.remove(); resizeGhost = null; }
     document.removeEventListener('pointermove', onResizeMove);
     document.removeEventListener('pointerup', onResizeEnd);
     document.removeEventListener('pointercancel', onResizeEnd);
 
-    const isBig = listSize(list) === 2;
-    let finalSize = isBig ? 2 : 1;
+    let finalBig;
     if (!moved && (Date.now() - tDown) < 350) {
-      // Quick tap on the corner toggles.
-      finalSize = isBig ? 1 : 2;
-    } else if (moved) {
-      // Commit based on how far they pulled. Generous threshold so the user
-      // has to clearly choose, not just twitch.
-      const s = lastScale || 1;
-      if (!isBig && s > 1.5) finalSize = 2;
-      else if (isBig && s < 0.7) finalSize = 1;
+      finalBig = !startedBig;                 // quick tap on the corner toggles
+    } else {
+      finalBig = (previewBig != null) ? previewBig : startedBig;
     }
-
-    // Clear every inline style we set during the drag. No setTimeout, no
-    // transition — anything async here used to race with cloud-sync and
-    // re-render, snapping the card back to 1x1 a second later.
-    card.style.transform = '';
-    card.style.transformOrigin = '';
-    card.style.zIndex = '';
-    card.style.transition = '';
+    // Keep the live class in sync; renderHome() below rebuilds from state anyway.
+    card.classList.toggle('big', finalBig);
 
     resizeState = null;
+    const finalSize = finalBig ? 2 : 1;
     if (listSize(list) !== finalSize) {
       list.size = finalSize;
       saveState();
