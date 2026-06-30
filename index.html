@@ -193,8 +193,12 @@
     height: env(safe-area-inset-top, 0px);
     z-index: 9;
     pointer-events: none;
-    -webkit-backdrop-filter: blur(16px) saturate(1.3) brightness(0.94);
-    backdrop-filter: blur(16px) saturate(1.3) brightness(0.94);
+    /* Solid header edge — the SAME background as the page (solid colour on a
+       list, gradient on home) painted identically, so it reads as one clean
+       surface with no seam. Content scrolls up and disappears under it. */
+    background: var(--app-bg, #c0392b);
+    background-size: 300vw 300vh;
+    animation: bgDrift 22s ease-in-out infinite;
   }
 
   /* App footer — undo / settings / redo + version, pinned to the bottom of
@@ -2678,6 +2682,9 @@
   // The browser's own lists. Written ONLY while signed out, so it can never
   // pick up an account's data; restored at sign-out.
   const LOCAL_KEY = 'checklist_browser';
+  // Browser-list ids we've already offered to merge into an account, so the
+  // "Add your browser lists?" prompt asks once per list and never nags again.
+  const MERGE_SEEN_KEY = 'jotlist_merge_seen';
   // The six brand-palette slots. DEFAULT_PALETTE is the factory setting; the
   // live palette lives in state.palette and may be user-generated in Settings.
   const DEFAULT_PALETTE = ['#c0392b', '#222e50', '#007991', '#4caf68', '#f3a712', '#7226f0'];
@@ -6097,11 +6104,23 @@
       if (todos.length !== DEFAULT_TODOS.length) return false;
       return todos.every((t, i) => t.text === DEFAULT_TODOS[i]);
     };
+    // Ids we've already offered before — never ask about them again, whether
+    // the user added them or dismissed the prompt. This stops the merge popup
+    // from reappearing on every single app open.
+    let seen = [];
+    try { seen = JSON.parse(localStorage.getItem(MERGE_SEEN_KEY) || '[]') || []; } catch (e) {}
+    const seenSet = new Set(seen);
     const extras = browserLists.filter(l => {
-      if (!l || accountIds.has(l.id)) return false;
+      if (!l || accountIds.has(l.id) || seenSet.has(l.id)) return false;
       return !isStarter(l);
     });
     if (!extras.length) return;
+    // Record this set as offered up front, so dismissing it also suppresses
+    // future nags — not just adding.
+    try {
+      extras.forEach(l => seenSet.add(l.id));
+      localStorage.setItem(MERGE_SEEN_KEY, JSON.stringify([...seenSet]));
+    } catch (e) {}
     const n = extras.length;
     showConfirm({
       title: 'Add your browser lists?',
