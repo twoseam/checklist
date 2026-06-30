@@ -5776,6 +5776,7 @@
   let authUser = null;        // the signed-in user, or null
   let cloudTimer = null;      // debounce handle for cloud saves
   let pendingPush = false;    // local edits made but not yet written to the cloud
+  let pushing = false;        // a pushCloud() is mid-flight (multi-step writes)
   let adoptingCloud = false;  // true while we're loading data down from the cloud
   let cloudChannel = null;    // realtime subscription, or null
 
@@ -6057,10 +6058,11 @@
   // actually differs (which is how we ignore the echo of our own writes).
   async function refreshFromCloud() {
     if (!supa || !authUser || adoptingCloud) return;
-    // A local edit is still waiting to be pushed. Pulling now would fetch the
-    // pre-edit cloud state and clobber it (e.g. a just-checked task springs
-    // back). Skip; the echo that follows our own push will reconcile cleanly.
-    if (pendingPush) return;
+    // A local edit is still waiting to be pushed, OR a multi-step push is mid-
+    // flight. Pulling now would fetch a pre-edit / half-written cloud state and
+    // clobber it (e.g. a just-checked task springs back). Skip; the echo that
+    // follows our own completed push will reconcile cleanly.
+    if (pendingPush || pushing) return;
     try {
       adoptingCloud = true;
       const { settings, lists, listMeta: meta } = await fetchCloudState();
@@ -6160,6 +6162,10 @@
     // We're committing the current state now. Clear the flag up front so any
     // edit made *during* this async push re-arms it and schedules another push.
     pendingPush = false;
+    // ...but stay "pushing" for the WHOLE multi-step write. The settings write
+    // lands before the list write; its realtime echo must not trigger a refresh
+    // that re-reads the not-yet-updated list and reverts a just-checked task.
+    pushing = true;
     try {
       // 1) Settings (includes list_order so home-screen order syncs)
       const settingsJson = sortedJson(settingsObject(state));
@@ -6256,6 +6262,8 @@
       }
     } catch (e) {
       console.warn('JotList pushCloud:', e);
+    } finally {
+      pushing = false;
     }
   }
 
