@@ -193,6 +193,7 @@
     height: env(safe-area-inset-top, 0px);
     z-index: 9;
     pointer-events: none;
+    display: none;   /* only shown on a list (body.list-open), not the all-lists page */
     /* Solid header edge — the SAME background as the page (solid colour on a
        list, gradient on home) painted identically, so it reads as one clean
        surface with no seam. Content scrolls up and disappears under it. */
@@ -200,6 +201,7 @@
     background-size: 300vw 300vh;
     animation: bgDrift 22s ease-in-out infinite;
   }
+  body.list-open .status-mask { display: block; }
 
   /* App footer — undo / settings / redo + version, pinned to the bottom of
      the window. Body-level and above the list view, so the control panel
@@ -3189,9 +3191,11 @@
     applyDark();
     if (activeListId && !getList(activeListId)) activeListId = null;
     if (activeListId && activeList()) {
+      document.body.classList.add('list-open');
       themeList(listHex(activeList()));
       renderList();
     } else {
+      document.body.classList.remove('list-open');
       document.getElementById('listView').classList.remove('active');
       renderHome();
     }
@@ -3377,6 +3381,7 @@
   // --- Navigation ----------------------------------------------------------
   function goHome() {
     activeListId = null;
+    document.body.classList.remove('list-open');   // hide the status-bar strip on the all-lists page
     document.getElementById('listView').classList.remove('active');
     renderHome();
   }
@@ -3385,6 +3390,7 @@
     const list = getList(id);
     if (!list) return;
     activeListId = id;
+    document.body.classList.add('list-open');   // show the status-bar strip on a list
     historyOpen = false;   // History starts collapsed each time a list opens
     themeList(listHex(list));
     renderList();
