@@ -173,6 +173,30 @@
   /* Clear the fixed app footer so the last tasks never hide behind it. */
   #listView .view-inner { padding-bottom: calc(116px + env(safe-area-inset-bottom, 0px)); }
 
+  /* Landscape is short: give the lowest items extra room so they can scroll
+     well clear of the footer instead of sitting cramped against it. */
+  @media (orientation: landscape) {
+    #homeView .view-inner { padding-bottom: max(45vh, 240px); }
+    #listView .view-inner { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
+  }
+
+  /* Frosted status-bar strip. Pinned to the very top, full width, above both
+     views (z 1 / 5) but below the footer (10) and modals. Covers the iOS
+     status-bar area so scrolling content is blurred behind it rather than
+     sliding visibly under the clock / battery. Zero-height (invisible) when
+     there is no safe-area inset, e.g. desktop or a non-standalone tab. */
+  .status-mask {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: env(safe-area-inset-top, 0px);
+    z-index: 9;
+    pointer-events: none;
+    -webkit-backdrop-filter: blur(16px) saturate(1.3) brightness(0.94);
+    backdrop-filter: blur(16px) saturate(1.3) brightness(0.94);
+  }
+
   /* App footer — undo / settings / redo + version, pinned to the bottom of
      the window. Body-level and above the list view, so the control panel
      stays put on every page. */
@@ -288,6 +312,8 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  /* Only clickable (signed in) when it actually holds an email. */
+  .header .account-email:not(:empty) { cursor: pointer; }
 
   /* Back button */
   .back-btn {
@@ -432,6 +458,20 @@
   .list-grid.reordering {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Crect x='1.5' y='1.5' width='90' height='90' rx='7' fill='rgba(255,255,255,0.05)' stroke='rgba(255,255,255,0.3)' stroke-width='1.6'/%3E%3C/svg%3E");
     background-repeat: repeat;
+  }
+
+  /* Resize preview — a hollow outline that follows the finger to show the
+     prospective footprint. The real card and its neighbours never move and the
+     text never scales; the size only commits on release. */
+  .resize-ghost {
+    position: fixed;
+    z-index: 6;
+    box-sizing: border-box;
+    border: 2.5px solid var(--on-bg, #fff);
+    border-radius: var(--radius, 6px);
+    background: color-mix(in srgb, var(--on-bg, #fff) 14%, transparent);
+    pointer-events: none;
+    will-change: transform;
   }
 
   /* The card a dragged list will merge into. */
@@ -2323,6 +2363,10 @@
 </div>
 
 <!-- HOME VIEW -->
+<!-- Frosted top strip covering the iOS status bar, so list content scrolls
+     cleanly behind a real header instead of showing through under the clock. -->
+<div class="status-mask"></div>
+
 <div class="view" id="homeView"><div class="view-inner">
   <div class="header">
     <svg class="logo" viewBox="0 0 610 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="JotList">
@@ -2340,7 +2384,7 @@
       </g>
     </svg>
     <div class="header-right">
-      <div class="account-email" id="accountEmail"></div>
+      <div class="account-email" id="accountEmail" onclick="tapAccountEmail()"></div>
       <div class="count" id="listCount"></div>
     </div>
   </div>
@@ -3731,6 +3775,7 @@
   }
 
   let resizeState = null;
+  let resizeGhost = null;   // hollow outline shown while dragging a corner
 
   function attachCardResize(handle, list) {
     if (!handle) return;
@@ -3788,9 +3833,21 @@
       scale = 1 + Math.min(0, Math.max(reach / (cell * 2), -0.5));
     }
     resizeState.lastScale = scale;
-    card.style.transformOrigin = originForGrip(dirX, dirY);
-    card.style.transform = 'scale(' + scale + ')';
-    card.style.zIndex = '5';
+    // Preview on a hollow ghost overlay, NOT on the card itself — so the card's
+    // text never scales and no neighbour ever shifts before release. The ghost
+    // sits over the card's current footprint and grows/shrinks with the finger.
+    if (!resizeGhost) {
+      const r = card.getBoundingClientRect();
+      resizeGhost = document.createElement('div');
+      resizeGhost.className = 'resize-ghost';
+      resizeGhost.style.left = r.left + 'px';
+      resizeGhost.style.top = r.top + 'px';
+      resizeGhost.style.width = r.width + 'px';
+      resizeGhost.style.height = r.height + 'px';
+      document.body.appendChild(resizeGhost);
+    }
+    resizeGhost.style.transformOrigin = originForGrip(dirX, dirY);
+    resizeGhost.style.transform = 'scale(' + scale + ')';
   }
 
   function onResizeEnd() {
@@ -3799,6 +3856,7 @@
     const grid = document.getElementById('listGrid');
     grid.classList.remove('resizing');
     grid.style.backgroundSize = '';
+    if (resizeGhost) { resizeGhost.remove(); resizeGhost = null; }
     document.removeEventListener('pointermove', onResizeMove);
     document.removeEventListener('pointerup', onResizeEnd);
     document.removeEventListener('pointercancel', onResizeEnd);
@@ -4356,7 +4414,7 @@
     if (!list) return;
     showConfirm({
       title: 'Clear history',
-      message: 'Clear every completed task for this list? This cannot be undone.',
+      message: 'Clear every completed task for this list? You can undo it right after if you change your&nbsp;mind.',
       confirmText: 'Clear history',
       danger: true,
       onConfirm: () => {
@@ -5585,14 +5643,24 @@
   // scrolling, so the pad must stay iOS-only.
   function setAppHeight() {
     let h = window.innerHeight;
-    if (window.navigator.standalone === true) {
+    // The screen-height floor only makes sense in PORTRAIT. iOS reports
+    // screen.height as the long (portrait) edge regardless of orientation, so
+    // in landscape it would force the view taller than the window and kill
+    // scrolling. Only pad up in portrait standalone.
+    const portrait = window.innerHeight >= window.innerWidth;
+    if (window.navigator.standalone === true && portrait) {
       h = Math.max(h, window.screen.height || 0);
     }
     document.documentElement.style.setProperty('--app-h', h + 'px');
   }
   setAppHeight();
   window.addEventListener('resize', setAppHeight);
-  window.addEventListener('orientationchange', setAppHeight);
+  // iOS updates innerHeight a beat after the rotation event fires — recompute
+  // immediately and again once the new dimensions have settled.
+  window.addEventListener('orientationchange', () => {
+    setAppHeight();
+    setTimeout(setAppHeight, 250);
+  });
 
   // Pull-to-refresh — the whole view drags down with the finger (native
   // iOS / Chrome feel), while a small dashed brand-coloured spinner fades
@@ -5694,6 +5762,7 @@
   let supa = null;            // Supabase client, or null if the SDK didn't load
   let authUser = null;        // the signed-in user, or null
   let cloudTimer = null;      // debounce handle for cloud saves
+  let pendingPush = false;    // local edits made but not yet written to the cloud
   let adoptingCloud = false;  // true while we're loading data down from the cloud
   let cloudChannel = null;    // realtime subscription, or null
 
@@ -5975,6 +6044,10 @@
   // actually differs (which is how we ignore the echo of our own writes).
   async function refreshFromCloud() {
     if (!supa || !authUser || adoptingCloud) return;
+    // A local edit is still waiting to be pushed. Pulling now would fetch the
+    // pre-edit cloud state and clobber it (e.g. a just-checked task springs
+    // back). Skip; the echo that follows our own push will reconcile cleanly.
+    if (pendingPush) return;
     try {
       adoptingCloud = true;
       const { settings, lists, listMeta: meta } = await fetchCloudState();
@@ -6050,6 +6123,7 @@
 
   function queueCloudPush() {
     if (!supa || !authUser || adoptingCloud) return;
+    pendingPush = true;   // local change not yet in the cloud — block clobbering pulls
     clearTimeout(cloudTimer);
     cloudTimer = setTimeout(pushCloud, 800);
   }
@@ -6058,6 +6132,9 @@
   // list content → lists; list layout → user_list_view; removed lists → DELETE.
   async function pushCloud() {
     if (!supa || !authUser) return;
+    // We're committing the current state now. Clear the flag up front so any
+    // edit made *during* this async push re-arms it and schedules another push.
+    pendingPush = false;
     try {
       // 1) Settings (includes list_order so home-screen order syncs)
       const settingsJson = sortedJson(settingsObject(state));
@@ -6592,6 +6669,18 @@
       const retry = box.querySelector('#emailRetry');
       if (retry) retry.addEventListener('click', renderAccount);
     }
+  }
+
+  // Tapping the email in the home header offers a quick sign-out.
+  function tapAccountEmail() {
+    if (!authUser) return;
+    showConfirm({
+      title: 'Sign out',
+      message: 'Sign out of <strong>' + esc(authUser.email || 'your account') + '</strong>? Your lists stay safe in your account.',
+      confirmText: 'Sign out',
+      danger: true,
+      onConfirm: signOut,
+    });
   }
 
   async function signOut() {
