@@ -6410,42 +6410,54 @@
     const btn = document.getElementById('shareSendBtn');
     btn.disabled = true;
     btn.textContent = 'Sending…';
+    const list = getList(shareListId);
+    let inviteError = null;
     try {
-      const list = getList(shareListId);
       const { error } = await supa.from('list_invites').insert({
         list_id: shareListId,
         invited_email: email,
         invited_by: authUser.id,
         list_title: list ? list.name : null,
       });
-      if (error) throw error;
-      // Best-effort email notification via the existing Apps Script relay.
-      // The relay accepts `kind: 'invite'` (Phase 3f); if the deployed copy
-      // doesn't recognise it the request just no-ops, the invite still works.
-      try {
-        const list = getList(shareListId);
-        const fr = await fetch(FEEDBACK_RELAY, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({
-            kind: 'invite',
-            to_email: email,
-            from_email: userEmail(),
-            list_name: list ? list.name : 'a list',
-            accept_url: location.origin + location.pathname,
-          }),
-        });
-      } catch (e) {}
-      document.getElementById('shareEmailField').value = '';
-      await renderShareDetails();
+      inviteError = error;
     } catch (e) {
-      console.warn('sendInvite:', e);
-      showConfirm({ title: 'Couldn\'t send', message: 'Something went wrong — please try again.', confirmText: 'OK', onConfirm: () => {} });
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Send invite';
+      inviteError = e;
     }
+    // The DB write is what actually creates the invite. Reset the button now —
+    // the email relay and the re-render below must never be able to leave it
+    // stuck on "Sending…" if they stall.
+    btn.disabled = false;
+    btn.textContent = 'Send invite';
+    if (inviteError) {
+      console.warn('sendInvite:', inviteError);
+      showConfirm({ title: 'Couldn\'t send', message: 'Something went wrong — please try again.', confirmText: 'OK', onConfirm: () => {} });
+      return;
+    }
+    document.getElementById('shareEmailField').value = '';
+    notifyInviteByEmail(email, list);   // best-effort, fire-and-forget
+    renderShareDetails();
+  }
+
+  // Best-effort invite email via the Apps Script relay. Fire-and-forget with an
+  // 8s timeout so a slow / unreachable relay can never block the Share UI.
+  function notifyInviteByEmail(email, list) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 8000);
+      fetch(FEEDBACK_RELAY, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        signal: ctrl.signal,
+        body: JSON.stringify({
+          kind: 'invite',
+          to_email: email,
+          from_email: userEmail(),
+          list_name: list ? list.name : 'a list',
+          accept_url: location.origin + location.pathname,
+        }),
+      }).catch(() => {}).finally(() => clearTimeout(t));
+    } catch (e) {}
   }
 
   async function cancelInvite(inviteId) {
