@@ -4421,7 +4421,7 @@
     if (!list) return;
     showConfirm({
       title: 'Clear history',
-      message: 'Clear every completed task for this list? You can undo it right after if you change your&nbsp;mind.',
+      message: 'Clear every completed task for this list? You can undo it right after if you change your mind.',
       confirmText: 'Clear history',
       danger: true,
       onConfirm: () => {
@@ -6707,7 +6707,7 @@
     if (!authUser) return;
     showConfirm({
       title: 'Sign out',
-      message: 'Sign out of <strong>' + esc(authUser.email || 'your account') + '</strong>? Your lists stay safe in your account.',
+      message: 'Sign out of ' + (authUser.email || 'your account') + '? Your lists stay safe in your account.',
       confirmText: 'Sign out',
       danger: true,
       onConfirm: signOut,
