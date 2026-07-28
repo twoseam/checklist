@@ -3223,7 +3223,19 @@
 
   function linkify(s) {
     const escaped = esc(String(s || ''));
-    return escaped.replace(LINK_RE, (m) => {
+    const stash = [];
+    // NEW: [label](url) -> labeled link, stashed so LINK_RE can't re-match
+    // the URL we just put inside an href attribute.
+    let out = escaped.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (m, label, url) => {
+      const raw = url.replace(/&amp;/g, '&').replace(/&lt;/g, '<')
+                     .replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+                     .replace(/&#39;/g, "'");
+      const hrefAttr = raw.replace(/"/g, '&quot;');
+      stash.push('<a class="task-link" href="' + hrefAttr + '" data-url="' + hrefAttr
+        + '" target="_blank" rel="noopener noreferrer">' + label + '</a>');
+      return '\x00' + (stash.length - 1) + '\x00';
+    });
+    out = out.replace(LINK_RE, (m) => {
       // Trim trailing punctuation that's almost certainly sentence grammar,
       // not part of the URL.
       let url = m, tail = '';
@@ -3239,6 +3251,7 @@
       return '<a class="task-link" href="' + hrefAttr + '" data-url="' + hrefAttr
         + '" target="_blank" rel="noopener noreferrer">' + url + '</a>' + tail;
     });
+    return out.replace(/\x00(\d+)\x00/g, (m, i) => stash[+i]);
   }
 
   function showLinkActions(url) {
