@@ -3256,19 +3256,7 @@
 
   function showLinkActions(url) {
     if (!url) return;
-    showConfirm({
-      minimal: true,
-      message: url,
-      confirmText: 'Open link',
-      onConfirm: () => window.open(url, '_blank', 'noopener,noreferrer'),
-      extra: {
-        label: 'Copy link',
-        onClick: () => {
-          try { navigator.clipboard && navigator.clipboard.writeText(url); }
-          catch (e) {}
-        },
-      },
-    });
+    window.open(url, '_blank', 'noopener,noreferrer');
   }
 
   // --- Theming -------------------------------------------------------------
